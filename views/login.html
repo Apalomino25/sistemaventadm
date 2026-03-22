@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>login</title>
+    <link rel="stylesheet" href="../assets/css/login.css">
+    <!-- link para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    
+    <div id="login-container">
+        <form id="login-box">
+            <img src="../assets/img/logo.png" alt="logo" id="logo">
+            <h2>Sistema de Ventas</h2>
+            <p>Dulces Majaderias</p>
+            <input type="text" name="usuario" placeholder="usuario" required class="inputs" autocomplete="username">
+            <div class="input-box">
+                <input type="password" name="contrasenia" placeholder="password" required class="inputs" id="password" autocomplete="current-password">
+                <i class="fa-solid fa-eye" id="togglePassword"></i>
+            </div>
+            <button  type="submit"  class="button">INGRESAR</button>
+            <span id="errorLogin"></span>
+        </form>
+    </div>
+
+    <script src="../assets/js/login.js"></script>
+
+</body>
+</html>
