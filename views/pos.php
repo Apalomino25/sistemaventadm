@@ -106,6 +106,14 @@
             </div>
 
             <div class="campoItem">
+                <label class="txt-campos">ESTADO</label>
+                <select id="estado">
+                    <option value="pagado" selected>pagado</option>
+                    <option value="pendiente">pendiente</option>
+                </select>
+            </div>
+
+            <div class="campoItem">
                 <label class="txt-campos">VUELTO S/.</label>
                 <input type="text"  readonly id="vuelto" placeholder="vuelto al cliente">
                 <div id="mensaje"></div>
