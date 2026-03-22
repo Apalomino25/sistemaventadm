@@ -1,0 +1,154 @@
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', sans-serif;
+} 
+
+/* CONTENEDOR PRINCIPAL */
+.pos-container{
+    padding:30px;
+    /* max-width:1000px; */
+    margin:auto;
+    /* border: solid 1px rgb(78, 67, 67); */
+    display: flex;
+    gap: 10px;
+    flex-direction: column;
+}
+
+/* ================= BUSQUEDA ================= */
+.busqueda{
+    display:flex;
+    align-items:center;
+    padding: 10px;
+    gap: 20px;
+}
+
+.input-buscar{
+    padding:10px 15px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    width:200px;
+}
+
+/* ================= TABLA ================= */
+
+.tabla-ventas{
+    width:100%;
+    border-collapse:collapse;
+    border:2px solid #999;
+    margin-bottom:20px;
+} 
+
+.tabla-ventas th{
+    background:#f5f5f5;
+    padding:10px;
+    text-align:left;
+}
+
+.tabla-ventas td{
+    padding:8px;
+    border-top:1px solid #ddd;
+}
+
+/* ================= DATOS VENTA ================= */
+.datosVenta{
+    display:flex;
+    flex-direction: column;
+    gap: 10px;
+    padding:10px;
+}
+
+.datosVentaItem{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 350px;
+}
+
+.datosVentaItem input{
+    padding:5px 10px;
+    border-radius:8px;
+    border:1px solid #8b8383;
+    width:200px;
+    text-align: center;
+    font-size: 16px;
+}
+
+/* ================= CAMPOS ================= */
+.campos{
+    display:flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+}
+
+.campoItem{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 350px;
+}
+
+.campoItem input{
+    padding:5px 10px;
+    border-radius:8px;
+    border:1px solid #8b8383;
+    width:200px;
+    text-align: center;
+    font-size: 18px;
+}
+
+.txt-campos {
+    font-weight: bold;
+    width: 120px;
+} 
+
+.primero {
+    align-self: flex-end;
+} 
+
+.campoItem input::placeholder{
+    color: #999;
+    font-size: 14px;
+} 
+
+/* ================= BOTONES ================= */
+.cont-btn { 
+    display: flex; 
+    align-items: center; 
+    justify-content: end; 
+    gap: 20px; 
+} 
+
+
+/* ICONOS ACCIONES */
+.acciones i {
+    cursor: pointer;
+    margin: 0 6px;
+    font-size: 16px;
+    color: #555; /* color base */
+    transition: color 0.2s ease;
+}
+
+/* EFECTO HOVER (colores distintos) */
+.imprimir:hover {
+    color: #3498db; /* azul */
+}
+
+.ver:hover {
+    color: #2ecc71; /* verde */
+}
+
+.eliminar:hover {
+    color: #e74c3c; /* rojo */
+}
+
+.acciones i {
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.acciones i:hover {
+    transform: scale(1.2);
+}
