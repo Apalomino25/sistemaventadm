@@ -1,0 +1,94 @@
+/* ticket.css: formato minimarket */
+body {
+    font-family: 'Arial', sans-serif;
+    width: 80mm;
+    margin: 0 auto;
+    font-size: 12px;
+    color: #000;
+}
+
+.center {
+    text-align: center;
+}
+
+h2, h3 {
+    text-align: center;
+    margin: 5px 0;
+}
+
+.logo {
+    width: 100px;
+    height: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 5px 0;
+}
+
+th, td {
+    padding: 3px 0;
+}
+
+th {
+    border-bottom: 1px dashed #000;
+}
+
+tfoot td {
+    border-top: 1px dashed #000;
+    font-weight: bold;
+}
+
+.right {
+    text-align: right;
+}
+
+p {
+    margin: 2px 0;
+}
+
+@media print {
+
+    @page {
+        size: 80mm auto; /* 🔥 clave para ticket */
+        margin: 0;
+    }
+
+    html, body {
+        width: 80mm;
+        margin: 0;
+        padding: 0;
+        height: auto;
+    }
+
+    body {
+        font-size: 11px;
+    }
+
+    .logo {
+        max-width: 100px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        padding: 2px 0;
+        font-size: 11px;
+    }
+
+    /* 🚀 evita hojas largas */
+    * {
+        page-break-inside: avoid !important;
+    }
+
+    /* 🔥 elimina espacio fantasma */
+    body::after {
+        content: "";
+        display: block;
+        height: 0;
+    }
+}
