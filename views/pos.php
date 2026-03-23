@@ -100,20 +100,20 @@
             </div>
 
             <div class="campoItem">
-                <label class="txt-campos">PAGO S/.</label>
-                <input type="text" inputmode="numeric"  placeholder="Paga el cliente..." id="pago">
-                <div id="msmPago"></div>
-            </div>
-
-            <div class="campoItem">
-                <label class="txt-campos">ESTADO</label>
-                <select id="estado">
+                <label class="txt-campos"> estadoPago </label>
+                <select id="estadoPago">
                     <option value="pagado" selected>pagado</option>
                     <option value="pendiente">pendiente</option>
                 </select>
             </div>
 
             <div class="campoItem">
+                <label class="txt-campos">PAGO S/.</label>
+                <input type="text" inputmode="numeric"  placeholder="Paga el cliente..." id="pago">
+                <div id="msmPago"></div>
+            </div>
+
+             <div class="campoItem">
                 <label class="txt-campos">VUELTO S/.</label>
                 <input type="text"  readonly id="vuelto" placeholder="vuelto al cliente">
                 <div id="mensaje"></div>
