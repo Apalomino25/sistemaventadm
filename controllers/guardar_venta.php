@@ -19,14 +19,13 @@ if(!$data){
 }
 
 
-
-
 $total = $data["total"];
 $total = floatval($data["total"]);
 $pago = floatval($data["pago"]);
 $vuelto = floatval($data["vuelto"]);
 $productos = $data["productos"];
 $tipoPago = $data['tipoPago'];
+$estadoPago = $data['estadoPago'];
 $clienteID = 1;
 $usuarioID = 1;
 
@@ -35,8 +34,8 @@ try{
 $conn->beginTransaction();
 
 $conn->query("INSERT INTO ventas
-(fecha,clienteID,usuarioID,total,tipoComprobante,estado,pago,vuelto,tipopago)
-VALUES (NOW(),$clienteID,$usuarioID,$total,'TICKET',1,$pago,$vuelto,'$tipoPago')");
+(fecha,clienteID,usuarioID,total,tipoComprobante,estado,pago,vuelto,tipopago,estadoPago)
+VALUES (NOW(),$clienteID,$usuarioID,$total,'TICKET',1,$pago,$vuelto,'$tipoPago','$estadoPago')");
 
 $ventaID = $conn->lastInsertId();
 
