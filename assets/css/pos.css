@@ -84,7 +84,7 @@
 
 .txt-campos {
     font-weight: bold;
-    width: 100px;
+    width: 150px;
 }
 
 .primero {
@@ -102,7 +102,21 @@
     padding: 6px;
     border-radius: 6px;
     border: 1px solid #ccc;
+    text-align: center;
+    font-size: 15px;
+    font-weight:bold;
 }
+
+#estadoPago {
+    width: 100%;
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    text-align: center;
+    font-size: 15px;
+    font-weight:bold;
+}
+
 
 /* BOTONES */
 .cont-btn { 
