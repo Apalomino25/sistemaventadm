@@ -122,6 +122,7 @@
             <div class="cont-btn">
                 <i class="fas fa-coins cont-btn-icons" id="btnHistoricoVentas" data-title="Hist. de Ventas"></i>
                 <i class="fas fa-save cont-btn-icons" id="btnGrabar" data-title="Grabar"></i>
+                <img src="../assets/logo.png" alt="logo">
                 <!-- <button type="button" class="cont-btn-item " id="btnGrabar">GRABAR</button> -->
             </div>
 
