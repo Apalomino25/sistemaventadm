@@ -187,7 +187,8 @@ function guardarVenta(){
     const pago = parseFloat(document.getElementById("pago").value) || 0;
     const vuelto = parseFloat(document.getElementById("vuelto").value) || 0;
     const tipoPago = document.getElementById("tipoPago").value;
-    const filas = document.querySelectorAll("#tabla-ventas tr");
+    const estadoPago = document.getElementById("estadoPago").value;
+    const filas = document.querySelectorAll("#tabla-ventas tr");  /// productos
     let productos = [];
 
     filas.forEach(fila => {
@@ -213,12 +214,16 @@ function guardarVenta(){
         alert("El pago no puede ser menor al total");
         return;
     }
+    
+    // enviando datos a controlador en php
 
     fetch("../controllers/guardar_venta.php",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({total, pago, vuelto, tipoPago, productos})
+        body:JSON.stringify({total, pago, vuelto, tipoPago,estadoPago,productos})
     })
+    
+
     .then(res => res.json())
     .then(json => {
         if(json.ok){
