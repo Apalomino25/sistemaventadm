@@ -224,10 +224,16 @@ function guardarVenta(){
     })
     
 
-    .then(res => res.json())
+    // .then(res => res.json())
+
+    .then(res => res.text())
+.then(data => {
+    console.log("RESPUESTA DEL PHP:", data);
+    return JSON.parse(data);
+})
     .then(json => {
         if(json.ok){
-            const url = `http://localhost/sistemaventasDM/ticket.php?id=${json.ventaID}`;
+            const url = `http://localhost/sistemaventadm/ticket.php?id=${json.ventaID}`;
             let iframe = document.createElement("iframe");
             iframe.style.display = "none";
             iframe.src = url;
@@ -279,7 +285,7 @@ document.addEventListener("click", function(e) {
 
     if (e.target.classList.contains("imprimir")) {
         const id = e.target.dataset.id;
-        const url = `http://localhost/sistemaventasDM/ticket.php?id=${id}`;
+        const url = `http://localhost/sistemaventadm/ticket.php?id=${id}`;
         let iframe = document.createElement("iframe");
         iframe.style.display = "none";
         iframe.src = url;
