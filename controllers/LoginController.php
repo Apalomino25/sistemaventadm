@@ -11,10 +11,12 @@ try {
 
         $usuario = $_POST["usuario"] ?? '';
         $contrasenia = $_POST["contrasenia"] ?? '';
+        // $usuarioID = $POST["usuarioID"] ?? '';
 
         $sql = "SELECT * FROM usuarios 
                 WHERE usuario = ? 
-                AND contrasenia = ? 
+                AND contrasenia = ?
+                -- AND usuarioID = ? 
                 AND estado = 1";
 
         $stmt = $conn->prepare($sql);
@@ -29,6 +31,7 @@ try {
             $_SESSION["usuario"] = $user["usuario"];
             $_SESSION["rol"] = $user["rol"];
             $_SESSION["nombre"] = $user["nombre"];
+            $_SESSION["usuarioID"] = $user["usuarioID"];
 
             echo json_encode([
                 "status" => "ok"
