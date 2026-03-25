@@ -9,7 +9,8 @@ try {
     $stmt = $conn->prepare("
         SELECT tipopago, 
                SUM(total) AS total_ventas, 
-               SUM(pago) AS total_recibido
+               SUM(pago) AS total_recibido,
+               SUM(vuelto) AS total_vuelto
         FROM ventas
         WHERE DATE(fecha) = :hoy
         GROUP BY tipopago
@@ -23,26 +24,24 @@ try {
 // Calcular sumas totales
 $suma_total = 0;
 $suma_recibido = 0;
+$suma_vuelto = 0; 
+
 foreach($cierres as $c){
     $suma_total += $c['total_ventas'];
     $suma_recibido += $c['total_recibido'];
+    $suma_vuelto += $c['total_vuelto'];
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Cierre de Caja</title>
     <link rel="stylesheet" href="../assets/css/cierres.css">
-    <style>
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
-        input.fisico { width: 80px; text-align: right; }
-        span.obs { font-weight: bold; }
-        button { margin-top: 10px; padding: 8px 16px; }
-    </style>
 </head>
+
 <body>
 
 <h2>Cierre del Día (<?php echo date('d-m-Y'); ?>)</h2>
@@ -54,6 +53,8 @@ foreach($cierres as $c){
                 <th>Tipo de Pago</th>
                 <th>Total Ventas</th>
                 <th>Total Recibido</th>
+                <th>Total Vuelto</th>
+                <th>Total Pendientes Pago</th>
                 <th>Físico</th>
                 <th>Observación</th>
             </tr>
