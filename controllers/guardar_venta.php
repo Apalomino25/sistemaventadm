@@ -2,7 +2,7 @@
 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
+session_start();
 
 header('Content-Type: application/json');
 
@@ -19,7 +19,7 @@ if(!$data){
 }
 
 
-$total = $data["total"];
+// $total = $data["total"];
 $total = floatval($data["total"]);
 $pago = floatval($data["pago"]);
 $vuelto = floatval($data["vuelto"]);
@@ -27,7 +27,7 @@ $productos = $data["productos"];
 $tipoPago = $data['tipoPago'];
 $estadoPago = $data['estadoPago'];
 $clienteID = 1;
-$usuarioID = 1;
+$usuarioID = $_SESSION['usuarioID'];
 
 try{
 
@@ -38,7 +38,6 @@ $conn->query("INSERT INTO ventas
 VALUES (NOW(),$clienteID,$usuarioID,$total,'TICKET',1,$pago,$vuelto,'$tipoPago','$estadoPago')");
 
 $ventaID = $conn->lastInsertId();
-
 foreach($productos as $prod){
 
     $productoID = $prod["productoID"];
@@ -57,10 +56,7 @@ foreach($productos as $prod){
 
 
 
-
-
 $conn->commit();
-
 echo json_encode([
     "ok"=>true,
     "ventaID"=>$ventaID
