@@ -278,10 +278,54 @@ function cargarHistorialVentas() {
         .catch(err => console.error("Error:", err));
 }
 
+
+/* acciones en el historial */ 
+
 document.addEventListener("click", function(e) {
     if (e.target.id === "btnHistoricoVentas") {
         cargarHistorialVentas();
     }
+     
+    /* ver detalle */
+    
+    
+    if (e.target.classList.contains("ver")) {
+        const id = e.target.dataset.id;
+
+        // Función para mostrar modal con detalles
+        fetch(`/sistemaventaDM/controllers/ver_detalle.php?id=${id}`)
+            .then(res => res.text())
+            .then(html => {
+                let modal = document.createElement("div");
+                modal.classList.add("modal-detalle");
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <span class="cerrar">&times;</span>
+                        ${html}
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                // Cerrar modal
+                modal.querySelector(".cerrar").addEventListener("click", () => {
+                    document.body.removeChild(modal);
+                });
+            })
+            .catch(err => console.error("Error al ver detalle:", err));
+    }
+
+    /* fin ver detalle */ 
+
+
+
+
+
+
+
+
+
+
+
 
     if (e.target.classList.contains("imprimir")) {
         const id = e.target.dataset.id;
@@ -318,6 +362,8 @@ document.addEventListener("click", function(e) {
         }
     }
 });
+
+
 
 // =======================
 // CIERRES DE CAJA
