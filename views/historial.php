@@ -2,11 +2,15 @@
 require_once "../config/conexion.php";
 
 // Traemos estado para mostrar activo/inactivo
-$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha, v.estado
-        FROM ventas v
-        INNER JOIN clientes c ON v.clienteID = c.clienteID
-        ORDER BY v.fecha DESC
-        LIMIT 50";
+$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,v.tipoPago, v.estado
+        FROM 
+         ventas v
+        INNER JOIN 
+         clientes c ON v.clienteID = c.clienteID
+        WHERE
+          DATE(v.fecha) = CURDATE()
+        ORDER BY 
+         v.fecha DESC;";
 
 $resultado = $conn->query($sql);
 ?>
@@ -27,11 +31,12 @@ $resultado = $conn->query($sql);
         <thead>
             <tr>
                 <th>ID</th>
+                <th>Fecha</th>
                 <th>Cliente</th>
-                <th>Total</th>
                 <th>Pagado</th>
                 <th>Vuelto</th>
-                <th>Fecha</th>
+                <th>Total</th>
+                <th>TipoPago</th>
                 <th>Estado</th>
                 <th>Acción</th>
             </tr>
@@ -41,20 +46,20 @@ $resultado = $conn->query($sql);
             <?php while($row = $resultado->fetch(PDO::FETCH_ASSOC)): ?>
             <tr class="<?= ($row['estado'] == 0) ? 'inactivo' : '' ?>">
                 <td><?= $row['ventaID'] ?></td>
+                <td><?= $row['fecha'] ?></td>
                 <td><?= htmlspecialchars($row['cliente']) ?></td>
-                <td class="total"><?= number_format($row['total'],2) ?></td>
                 <td class="pago"><?= number_format($row['pago'],2) ?></td>
                 <td class="vuelto"><?= number_format($row['vuelto'],2) ?></td>
-                <td><?= $row['fecha'] ?></td>
+                <td class="total"><?= number_format($row['total'],2) ?></td>
+                <td class="tipoPago"><?= ($row['tipoPago']) ?></td>
                 <td><?= ($row['estado'] == 1) ? 'Activo' : 'Anulado' ?></td>
-           <td class="acciones">
-    <i class="fa-solid fa-print imprimir" data-id="<?= $row['ventaID'] ?>"></i>
-    <i class="fa-solid fa-eye ver" data-id="<?= $row['ventaID'] ?>"></i>
-
-    <?php if($row['estado'] == 1): ?>
-        <i class="fa-solid fa-trash eliminar" data-id="<?= $row['ventaID'] ?>"></i>
-    <?php endif; ?>
-</td>
+                <td class="acciones">
+                    <i class="fa-solid fa-print imprimir" data-id="<?= $row['ventaID'] ?>"></i>
+                    <i class="fa-solid fa-eye ver" data-id="<?= $row['ventaID'] ?>"></i>
+                    <?php if($row['estado'] == 1): ?>
+                        <i class="fa-solid fa-trash eliminar" data-id="<?= $row['ventaID'] ?>"></i>
+                    <?php endif; ?>
+                </td>
                 </tr>
                 <?php endwhile; ?>
         </tbody>
