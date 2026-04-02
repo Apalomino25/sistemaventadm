@@ -1,18 +1,18 @@
 
 // Imprimir venta
-function imprimirVenta(ventaID){
-    const url = `http://localhost/sistemaventaDM/ticket.php?id=${ventaID}`;
-    let iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = url;
-    document.body.appendChild(iframe);
+// function imprimirVenta(ventaID){
+//     const url = `http://localhost/sistemaventaDM/ticket.php?id=${ventaID}`;
+//     let iframe = document.createElement("iframe");
+//     iframe.style.display = "none";
+//     iframe.src = url;
+//     document.body.appendChild(iframe);
 
-    iframe.onload = function() {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        setTimeout(() => document.body.removeChild(iframe), 1000);
-    };
-}
+//     iframe.onload = function() {
+//         iframe.contentWindow.focus();
+//         iframe.contentWindow.print();
+//         setTimeout(() => document.body.removeChild(iframe), 1000);
+//     };
+// }
 
 // // Ver detalles de venta
 // function verDetalle(ventaID){
