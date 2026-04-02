@@ -19,9 +19,10 @@ try {
 
     // PRODUCTOS
     $stmtProd = $conn->prepare("
-        SELECT p.nombre, dv.cantidad, dv.precioUnitario AS precio, dv.subtotal
+        SELECT p.nombre,p.descripcion, dv.cantidad, dv.precioUnitario AS precio, dv.subtotal
         FROM detalleventa dv
-        JOIN productos p ON p.productoID = dv.productoID
+        JOIN 
+        productos p ON p.productoID = dv.productoID
         WHERE dv.ventaID = :ventaID
     ");
     $stmtProd->execute([':ventaID' => $ventaID]);
@@ -86,6 +87,7 @@ try {
 <thead>
 <tr>
 <th>Producto</th>
+<th>Descripcion</th>
 <th class="center">Cant</th>
 <th class="right">P.Unit</th>
 <th class="right">Subtotal</th>
@@ -96,6 +98,7 @@ try {
 <?php foreach($productos as $prod): ?>
 <tr>
 <td><?php echo htmlspecialchars($prod['nombre']); ?></td>
+<td><?php echo htmlspecialchars($prod['descripcion']); ?></td>
 <td class="center"><?php echo $prod['cantidad']; ?></td>
 <td class="right"><?php echo number_format($prod['precio'],2); ?></td>
 <td class="right"><?php echo number_format($prod['subtotal'],2); ?></td>
