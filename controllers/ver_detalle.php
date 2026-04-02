@@ -9,8 +9,7 @@ if (!isset($_GET['id'])) {
 $ventaID = $_GET['id'];
 
 try {
-
-    // 🔹 1. Obtener datos de la venta
+    // 🔹 Obtener datos de la venta
     $sqlVenta = "SELECT 
                     v.fecha, 
                     v.tipoPago, 
@@ -26,7 +25,6 @@ try {
     $stmtVenta = $conn->prepare($sqlVenta);
     $stmtVenta->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
     $stmtVenta->execute();
-
     $venta = $stmtVenta->fetch(PDO::FETCH_ASSOC);
 
     if (!$venta) {
@@ -34,7 +32,7 @@ try {
         exit;
     }
 
-    // 🔹 2. Obtener detalle de productos
+    // 🔹 Obtener detalle de productos
     $sql = "SELECT 
                 p.nombre,
                 p.descripcion,
@@ -49,7 +47,6 @@ try {
     $stmt = $conn->prepare($sql);
     $stmt->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
     $stmt->execute();
-
     $datos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!$datos) {
@@ -57,68 +54,55 @@ try {
         exit;
     }
 
-    // 🔹 3. Mostrar cabecera
-    echo "<div style='font-family:Arial;'>";
-    echo "<h2>🧾 Detalle de Venta #{$ventaID}</h2>";
+    // 🔹 Contenedor principal de la venta
+    echo "<div class='detalle-venta'>";
 
+    echo "<h2>🧾 Detalle de Venta #{$ventaID}</h2>";
     echo "<p><strong>Cliente:</strong> {$venta['cliente']}</p>";
     echo "<p><strong>Fecha:</strong> {$venta['fecha']}</p>";
     echo "<p><strong>Tipo de Pago:</strong> {$venta['tipoPago']}</p>";
 
     echo "<hr>";
 
-    // 🔹 4. Tabla de productos
-    echo "<table style='width:100%; border-collapse:collapse; text-align:center;'>";
-
-    echo "<tr style='background:#f2f2f2'>
-            <th style='padding:8px; border:1px solid #ccc;'>Producto</th>
-            <th style='padding:8px; border:1px solid #ccc;'>Descripción</th>
-            <th style='padding:8px; border:1px solid #ccc;'>Cantidad</th>
-            <th style='padding:8px; border:1px solid #ccc;'>Precio</th>
-            <th style='padding:8px; border:1px solid #ccc;'>Subtotal</th>
+    // 🔹 Tabla de productos
+    echo "<table class='tabla-detalle'>";
+    echo "<tr>
+            <th>Producto</th>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>Precio</th>
+            <th>Subtotal</th>
           </tr>";
 
     $totalCalculado = 0;
-
     foreach ($datos as $row) {
         $totalCalculado += $row['subtotal'];
-
         echo "<tr>
-                <td style='padding:6px; border:1px solid #ccc;'>{$row['nombre']}</td>
-                <td style='padding:6px; border:1px solid #ccc;'>{$row['descripcion']}</td>
-                <td style='padding:6px; border:1px solid #ccc;'>{$row['cantidad']}</td>
-                <td style='padding:6px; border:1px solid #ccc;'>S/ " . number_format($row['precioUnitario'], 2) . "</td>
-                <td style='padding:6px; border:1px solid #ccc;'>S/ " . number_format($row['subtotal'], 2) . "</td>
+                <td>{$row['nombre']}</td>
+                <td>{$row['descripcion']}</td>
+                <td>{$row['cantidad']}</td>
+                <td>S/ " . number_format($row['precioUnitario'], 2) . "</td>
+                <td>S/ " . number_format($row['subtotal'], 2) . "</td>
               </tr>";
     }
 
-    // 🔹 5. Totales
+    // 🔹 Totales
     echo "<tr>
-            <td colspan='4' style='text-align:right; padding:8px; border:1px solid #ccc;'><strong>Total:</strong></td>
-            <td style='padding:8px; border:1px solid #ccc;'><strong>S/ " . number_format($totalCalculado, 2) . "</strong></td>
+            <td colspan='4' class='text-right'><strong>Total:</strong></td>
+            <td><strong>S/ " . number_format($totalCalculado, 2) . "</strong></td>
           </tr>";
-
     echo "<tr>
-            <td colspan='4' style='text-align:right; padding:8px; border:1px solid #ccc;'>Pago:</td>
-            <td style='padding:8px; border:1px solid #ccc;'>S/ " . number_format($venta['pago'], 2) . "</td>
+            <td colspan='4' class='text-right'>Pago:</td>
+            <td>S/ " . number_format($venta['pago'], 2) . "</td>
           </tr>";
-
     echo "<tr>
-            <td colspan='4' style='text-align:right; padding:8px; border:1px solid #ccc;'>Vuelto:</td>
-            <td style='padding:8px; border:1px solid #ccc;'>S/ " . number_format($venta['vuelto'], 2) . "</td>
+            <td colspan='4' class='text-right'>Vuelto:</td>
+            <td>S/ " . number_format($venta['vuelto'], 2) . "</td>
           </tr>";
-
     echo "</table>";
 
-    echo "<br>";
-
-    // 🔹 6. Botón imprimir
-    echo "<button onclick='window.print()' 
-            style='padding:10px 15px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer;'>
-            🖨️ Imprimir
-          </button>";
-
-    echo "</div>";
+    
+    echo "</div>"; // cierre del contenedor detalle-venta
 
 } catch (PDOException $e) {
     echo "<p>Error: " . $e->getMessage() . "</p>";
