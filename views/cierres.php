@@ -8,22 +8,13 @@ try {
     $stmt = $conn->prepare("
         SELECT tipopago, 
                SUM(total) AS total_ventas, 
-               
-               SUM(CASE 
-                   WHEN estadoPago = 'pagado' THEN total 
-                   ELSE 0 
-               END) AS total_pagado,
-
-               SUM(CASE 
-                   WHEN estadoPago = 'pendiente' THEN total 
-                   ELSE 0 
-               END) AS total_pendiente,
-
+               SUM(CASE WHEN estadoPago = 'pagado' THEN total ELSE 0 END) AS total_pagado,
+               SUM(CASE WHEN estadoPago = 'pendiente' THEN total ELSE 0 END) AS total_pendiente,
                SUM(pago) AS total_recibido,
                SUM(vuelto) AS total_vuelto
-
         FROM ventas
         WHERE DATE(fecha) = :hoy
+          AND estado = 1   -- solo ventas activas
         GROUP BY tipopago
     ");
 
@@ -34,7 +25,7 @@ try {
     die("Error: " . $e->getMessage());
 }
 
-// Totales
+// Totales generales
 $suma_total = 0;
 $suma_pagado = 0;
 $suma_pendiente = 0;
@@ -80,30 +71,20 @@ foreach($cierres as $c){
 <?php foreach($cierres as $c): ?>
 <tr>
 <td><?php echo strtoupper($c['tipopago']); ?></td>
-
 <td>S/ <?php echo number_format($c['total_ventas'],2); ?></td>
-
-<td class="total-pagado">
-    <?php echo number_format($c['total_pagado'],2); ?>
-</td>
-
+<td class="total-pagado">S/ <?php echo number_format($c['total_pagado'],2); ?></td>
 <td>S/ <?php echo number_format($c['total_pendiente'],2); ?></td>
-
-<td><?php echo number_format($c['total_recibido'],2); ?></td>
-
-<td><?php echo number_format($c['total_vuelto'],2); ?></td>
-
+<td>S/ <?php echo number_format($c['total_recibido'],2); ?></td>
+<td>S/ <?php echo number_format($c['total_vuelto'],2); ?></td>
 <td>
-<input type="number"
-class="fisico"
-data-tipopago="<?php echo $c['tipopago']; ?>"
-step="0.01"
-min="0"
-value="<?php echo $c['total_pagado']; ?>">
+    <input type="number"
+           class="fisico"
+           data-tipopago="<?php echo $c['tipopago']; ?>"
+           step="0.01"
+           min="0"
+           value="<?php echo $c['total_pagado']; ?>">
 </td>
-
 <td><span class="obs">Correcto</span></td>
-
 </tr>
 <?php endforeach; ?>
 </tbody>
@@ -114,7 +95,7 @@ value="<?php echo $c['total_pagado']; ?>">
 <th>S/ <?php echo number_format($suma_total,2); ?></th>
 <th>S/ <?php echo number_format($suma_pagado,2); ?></th>
 <th>S/ <?php echo number_format($suma_pendiente,2); ?></th>
-<th><?php echo number_format($suma_recibido,2); ?></th>
+<th>S/ <?php echo number_format($suma_recibido,2); ?></th>
 <th>S/ <?php echo number_format($suma_vuelto,2); ?></th>
 <th id="totalFisico">S/ <?php echo number_format($suma_pagado,2); ?></th>
 <th></th>
@@ -124,7 +105,6 @@ value="<?php echo $c['total_pagado']; ?>">
 
 <button id="guardar-cierre">Guardar Cierre</button>
 
-<!-- enlace js-->
 <script src="../assets/js/cierres.js"></script>
 
 </body>
