@@ -288,31 +288,38 @@ document.addEventListener("click", function(e) {
      
     /* ver detalle */
     
-    
     if (e.target.classList.contains("ver")) {
-        const id = e.target.dataset.id;
+    const id = e.target.dataset.id;
 
-        // Función para mostrar modal con detalles
-        fetch(`/sistemaventaDM/controllers/ver_detalle.php?id=${id}`)
-            .then(res => res.text())
-            .then(html => {
-                let modal = document.createElement("div");
-                modal.classList.add("modal-detalle");
-                modal.innerHTML = `
-                    <div class="modal-content">
-                        <span class="cerrar">&times;</span>
-                        ${html}
-                    </div>
+    fetch(`/sistemaventaDM/controllers/ver_detalle.php?id=${id}`)
+        .then(res => res.text())
+        .then(html => {
+            // Crear contenedor del modal
+            let modal = document.createElement("div");
+            modal.classList.add("modal-detalle"); // estilo de fondo oscuro
+
+            // Insertar el contenido del modal correctamente
+    
+            modal.innerHTML = `
+                <div class="modal-content">
+                <span class="cerrar">&times;</span>
+                 ${html}  <!-- Ya incluye detalle-venta -->
+                </div>
                 `;
-                document.body.appendChild(modal);
 
-                // Cerrar modal
-                modal.querySelector(".cerrar").addEventListener("click", () => {
-                    document.body.removeChild(modal);
-                });
-            })
-            .catch(err => console.error("Error al ver detalle:", err));
-    }
+
+
+
+            document.body.appendChild(modal);
+
+            // Cerrar modal
+            modal.querySelector(".cerrar").addEventListener("click", () => {
+                document.body.removeChild(modal);
+            });
+        })
+        .catch(err => console.error("Error al ver detalle:", err));
+}
+
 
     /* fin ver detalle */ 
 
