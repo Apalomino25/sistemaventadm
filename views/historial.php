@@ -20,7 +20,7 @@ $resultado = $conn->query($sql);
 <head>
     <meta charset="UTF-8">
     <title>Historial de Ventas</title>
-    <link rel="stylesheet" href="../assets/css/historial.css">
+    <link rel="stylesheet" href="../assets/css/pos.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 <body>
@@ -69,6 +69,6 @@ $resultado = $conn->query($sql);
 
 
 
-<!-- <script src="../assets/js/historial.js"></script> -->
+<script src="../assets/js/pos.js"></script>
 </body>
 </html>
