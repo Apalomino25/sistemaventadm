@@ -288,49 +288,25 @@ document.addEventListener("click", function(e) {
      
     /* ver detalle */
     
-    if (e.target.classList.contains("ver")) {
+if (e.target.classList.contains("ver")) {
     const id = e.target.dataset.id;
 
     fetch(`/sistemaventaDM/controllers/ver_detalle.php?id=${id}`)
         .then(res => res.text())
         .then(html => {
-            // Crear contenedor del modal
-            let modal = document.createElement("div");
-            modal.classList.add("modal-detalle"); // estilo de fondo oscuro
+            // Eliminar cualquier detalle anterior
+            const anterior = document.querySelector('.detalle-venta-modal');
+            if(anterior) anterior.remove();
 
-            // Insertar el contenido del modal correctamente
-    
-            modal.innerHTML = `
-                <div class="modal-content">
-                <span class="cerrar">&times;</span>
-                 ${html}  <!-- Ya incluye detalle-venta -->
-                </div>
-                `;
-
-
-
-
+            // Insertar nuevo detalle
+            const modal = document.createElement('div');
+            modal.innerHTML = html; // ya contiene estilos inline y botón de cerrar
             document.body.appendChild(modal);
-
-            // Cerrar modal
-            modal.querySelector(".cerrar").addEventListener("click", () => {
-                document.body.removeChild(modal);
-            });
         })
         .catch(err => console.error("Error al ver detalle:", err));
 }
 
-
     /* fin ver detalle */ 
-
-
-
-
-
-
-
-
-
 
 
 
