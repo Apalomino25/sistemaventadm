@@ -69,6 +69,6 @@ $resultado = $conn->query($sql);
 
 
 
-<script src="../assets/js/historial.js"></script>
+<!-- <script src="../assets/js/historial.js"></script> -->
 </body>
 </html>
