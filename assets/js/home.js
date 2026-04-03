@@ -32,6 +32,8 @@ document.addEventListener("click", () => {
 });
 
 // Función para cargar páginas vía fetch
+
+
 function cargarPagina(pagina){
     fetch(pagina)
         .then(res => res.text())
@@ -48,6 +50,10 @@ function cargarPagina(pagina){
         })
         .catch(err => console.error("Error cargando página:", err));
 }
+
+
+
+
 
 // Evento click para botones históricos (opcional)
 document.addEventListener("click", function(e){
