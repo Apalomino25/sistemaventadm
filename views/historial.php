@@ -2,7 +2,7 @@
 require_once "../config/conexion.php";
 
 // Traemos estado para mostrar activo/inactivo
-$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,v.tipoPago, v.estado
+$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,v.tipoPago, v.estado , v.estadoPago
         FROM 
          ventas v
         INNER JOIN 
@@ -37,6 +37,7 @@ $resultado = $conn->query($sql);
                 <th>Vuelto</th>
                 <th>Total</th>
                 <th>TipoPago</th>
+                <th>EstadoPago</th>
                 <th>Estado</th>
                 <th>Acción</th>
             </tr>
@@ -52,6 +53,7 @@ $resultado = $conn->query($sql);
                 <td class="vuelto"><?= number_format($row['vuelto'],2) ?></td>
                 <td class="total"><?= number_format($row['total'],2) ?></td>
                 <td class="tipoPago"><?= ($row['tipoPago']) ?></td>
+                <td class="estadoPago"><?= ($row['estadoPago']) ?></td>
                 <td><?= ($row['estado'] == 1) ? 'Activo' : 'Anulado' ?></td>
                 <td class="acciones">
                     <i class="fa-solid fa-print imprimir" data-id="<?= $row['ventaID'] ?>"></i>
