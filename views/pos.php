@@ -54,7 +54,7 @@
 
         <div class="busqueda">
             <label>Buscar Producto:</label>
-            <input type="text" placeholder="Escanear producto..." id="codigo" class="input-buscar"  >
+            <input type="text" placeholder="Escanear producto..." id="codigo" class="input-buscar">
         </div>
 
         <!-- FIN BUSQUEDA -->
