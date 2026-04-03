@@ -93,6 +93,13 @@ function buscarProducto(codigo){
             alert("Producto no encontrado");
             return;
         }
+
+         // 🔹 Verificar stock
+            if(data.stock <= 0){
+                alert("No hay stock disponible para este producto");
+                return; // detener ejecución
+            }
+    
         agregarProductoTabla(data);
         document.getElementById("codigo").focus();
     });
@@ -347,10 +354,11 @@ if (e.target.classList.contains("ver")) {
 });
 
 
-
 // =======================
 // CIERRES DE CAJA
 // =======================
+
+
 window.initCierres = function() {
     const btnGuardar = document.getElementById('guardar-cierre');
     if (!btnGuardar) return;
@@ -374,30 +382,42 @@ window.initCierres = function() {
     function formatearNumero(valor){
         return parseFloat(valor || 0).toFixed(2);
     }
+ 
+
+
+    /* Funcion de comparaciones */
 
     function actualizarObservaciones() {
-        inputsFisico.forEach(input => {
-            const totalRecibido = parseFloat(
-                input.parentElement.previousElementSibling.textContent.replace(/[^\d.-]/g,'')
-            ) || 0;
+    inputsFisico.forEach(input => {
 
-            let fisico = parseFloat(input.value.replace(/[^\d.-]/g,'')) || 0;
+        const totalRecibido = parseFloat(input.dataset.total) || 0;
 
-            if(input.value.trim() !== '') input.value = formatearNumero(fisico);
+        // quitar cualquier carácter no numérico y parsear
+        let fisico = parseFloat(input.value.replace(/[^\d.-]/g,'')) || 0;
 
-            const obs = input.parentElement.nextElementSibling.querySelector('.obs');
-            if(fisico === totalRecibido){
-                obs.textContent = 'Correcto';
-                obs.style.color = 'green';
-            } else if(fisico < totalRecibido){
-                obs.textContent = 'Faltante';
-                obs.style.color = 'red';
-            } else {
-                obs.textContent = 'Sobrante';
-                obs.style.color = 'orange';
-            }
-        });
-    }
+        // actualizar valor formateado
+        if(input.value.trim() !== '') input.value = formatearNumero(fisico);
+
+        // acceder al <td> de observación directamente
+        const obs = input.parentElement.nextElementSibling;
+
+        if(fisico === totalRecibido){
+            obs.textContent = 'Correcto';
+            obs.style.color = 'green';
+        } else if(fisico < totalRecibido){
+            obs.textContent = 'Faltante';
+            obs.style.color = 'red';
+        } else {
+            obs.textContent = 'Sobrante';
+            obs.style.color = 'orange';
+        }
+    });
+}
+
+
+    /* fin funcion de comparaciones */
+
+
 
     inputsFisico.forEach(input => {
         input.addEventListener('blur', actualizarObservaciones);
@@ -430,9 +450,100 @@ window.initCierres = function() {
         })
         .catch(err => alert('Error de servidor: ' + err));
     });
+
 };
+
+
+
+
+
+
+
+
+
+//  JS PARA HISTORUAL DE CIERRES */ 
+
+
+document.addEventListener("click", function(e) {
+
+    /* Ver detalle de cierre */
+    if (e.target.classList.contains("ver-cierre")) {
+        const id = e.target.dataset.id;
+
+        fetch(`../controllers/ver_cierre.php?id=${id}`)
+            .then(res => res.text())
+            .then(html => {
+                // Eliminar cualquier modal anterior
+                const anterior = document.querySelector('.detalle-cierre-modal');
+                if (anterior) anterior.remove();
+
+                // Insertar nuevo modal
+                const modal = document.createElement('div');
+                modal.classList.add('detalle-cierre-modal');
+                modal.innerHTML = html; // Contiene estilos inline y botón de cerrar
+                document.body.appendChild(modal);
+            })
+            .catch(err => console.error("Error al ver detalle del cierre:", err));
+    }
+
+    /* Imprimir cierre */
+    
+    if (e.target.classList.contains("imprimir-cierre")) {
+        const id = e.target.dataset.id;
+        const url = `../ticket_cierre.php?id=${id}`;
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = url;
+        document.body.appendChild(iframe);
+
+        iframe.onload = function() {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 1000);
+        };
+    }
+
+    /* Anular cierre */
+    if (e.target.classList.contains("eliminar-cierre")) {
+        const id = e.target.dataset.id;
+        if (confirm("¿Seguro que deseas anular este cierre?")) {
+            fetch("../controllers/anular_cierre.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({cierreID: id})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success){
+                    alert("Cierre anulado correctamente");
+                    // Recargar tabla
+                    location.reload();
+                } else {
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(err => console.error("Error al anular cierre:", err));
+        }
+    }
+
+    /* Editar cierre */
+    if (e.target.classList.contains("editar-cierre")) {
+        const id = e.target.dataset.id;
+        // Aquí puedes abrir un modal o redirigir a la página de edición
+        window.location.href = `editar_cierre.php?id=${id}`;
+    }
+
+});
+
+
+/* FIN */ 
+
 
 // =======================
 // INICIALIZACIÓN AUTOMÁTICA
 // =======================
-document.addEventListener("DOMContentLoaded", iniciarPOS);
+
+document.addEventListener("DOMContentLoaded", () => {
+    iniciarPOS();
+    initCierres();
+});
