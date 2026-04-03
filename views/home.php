@@ -51,7 +51,7 @@ session_start();
             <a onclick="cargarPagina('cierres.php')">
                 <i class="fa-solid fa-cart-shopping"></i>Cierre
             </a>
-            <a onclick="cargarPagina('cierres.php')">
+            <a onclick="cargarPagina('historial_cierre.php')">
                 <i class="fa-solid fa-chart-line"></i> hist_Cierres
             </a>
         </div>
