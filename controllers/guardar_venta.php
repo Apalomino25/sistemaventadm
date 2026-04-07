@@ -78,7 +78,7 @@ try {
 
     $ventaID = $conn->lastInsertId();
 
-    // 🔹 Insertar detalle
+    // 🔹 Insertar detalle1
     $stmtDetalle = $conn->prepare("INSERT INTO detalleventa
     (ventaID,productoID,cantidad,precioUnitario,subtotal)
     VALUES (?,?,?,?,?)");
