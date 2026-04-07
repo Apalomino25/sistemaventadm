@@ -16,6 +16,17 @@ if(!$data){
     exit;
 }
 
+// 🔥 TOKEN (anti-duplicados)
+$token = $data["token"] ?? null;
+
+if(!$token){
+    echo json_encode([
+        "ok"=>false,
+        "error"=>"Token no enviado"
+    ]);
+    exit;
+}
+
 // Datos de la venta
 $total = floatval($data["total"]);
 $pago = floatval($data["pago"]);
@@ -44,28 +55,53 @@ try {
         exit;
     }
 
-    // 🔹 Iniciar transacción para guardar la venta
+    // 🔹 Iniciar transacción
     $conn->beginTransaction();
 
-    $conn->query("INSERT INTO ventas
-    (fecha,clienteID,usuarioID,total,tipoComprobante,estado,pago,vuelto,tipopago,estadoPago)
-    VALUES (NOW(),$clienteID,$usuarioID,$total,'TICKET',1,$pago,$vuelto,'$tipoPago','$estadoPago')");
+    // 🔥 INSERT con token
+    $stmtVenta = $conn->prepare("INSERT INTO ventas
+    (fecha,clienteID,usuarioID,total,tipoComprobante,estado,pago,vuelto,tipopago,estadoPago,token)
+    VALUES (NOW(),?,?,?,?,?,?,?,?,?,?)");
+
+    $stmtVenta->execute([
+        $clienteID,
+        $usuarioID,
+        $total,
+        'TICKET',
+        1,
+        $pago,
+        $vuelto,
+        $tipoPago,
+        $estadoPago,
+        $token
+    ]);
 
     $ventaID = $conn->lastInsertId();
 
+    // 🔹 Insertar detalle
+    $stmtDetalle = $conn->prepare("INSERT INTO detalleventa
+    (ventaID,productoID,cantidad,precioUnitario,subtotal)
+    VALUES (?,?,?,?,?)");
+
+    // 🔹 Actualizar stock
+    $stmtStock = $conn->prepare("UPDATE productos
+    SET stock = stock - ?
+    WHERE productoID = ?");
+
     foreach($productos as $prod){
-        $productoID = $prod["productoID"];
-        $cantidad = $prod["cantidad"];
-        $precio = $prod["precio"];
-        $subtotal = $prod["subtotal"];
 
-        $conn->query("INSERT INTO detalleventa
-        (ventaID,productoID,cantidad,precioUnitario,subtotal)
-        VALUES ($ventaID,$productoID,$cantidad,$precio,$subtotal)");
+        $stmtDetalle->execute([
+            $ventaID,
+            $prod["productoID"],
+            $prod["cantidad"],
+            $prod["precio"],
+            $prod["subtotal"]
+        ]);
 
-        $conn->query("UPDATE productos
-        SET stock = stock - $cantidad
-        WHERE productoID = $productoID");
+        $stmtStock->execute([
+            $prod["cantidad"],
+            $prod["productoID"]
+        ]);
     }
 
     $conn->commit();
@@ -75,13 +111,21 @@ try {
         "ventaID"=>$ventaID
     ]);
 
-} catch(Exception $e){
+} catch(PDOException $e){
 
     $conn->rollBack();
 
-    echo json_encode([
-        "ok"=>false,
-        "error"=>$e->getMessage()
-    ]);
+    // 🔥 Error por token duplicado
+    if($e->getCode() == 23000){
+        echo json_encode([
+            "ok"=>false,
+            "error"=>"Venta duplicada detectada"
+        ]);
+    } else {
+        echo json_encode([
+            "ok"=>false,
+            "error"=>$e->getMessage()
+        ]);
+    }
 }
 ?>
