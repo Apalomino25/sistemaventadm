@@ -96,37 +96,62 @@ function actualizarObservaciones(){
 
     });
 
-    // 🔹 Guardar cierre
-    if(btnGuardar){
-        btnGuardar.addEventListener('click', () => {
+   // 🔹 Guardar cierre
+if(btnGuardar){
+    btnGuardar.addEventListener('click', () => {
 
-            const cierresData = [];
+        const cierresData = [];
 
-            fisicos.forEach(input => {
-                cierresData.push({ 
-                    tipopago: input.dataset.tipopago, 
-                    fisico: parseFloat(input.value) || 0
-                });
+        document.querySelectorAll('#tabla-cierres tbody tr').forEach(tr => {
+            const tipopago = tr.querySelector('.fisico').dataset.tipopago;
+
+            const total_ventas   = parseFloat(tr.children[1].textContent.replace('S/','').replace(',','')) || 0;
+            const total_pagado   = parseFloat(tr.children[2].textContent.replace('S/','').replace(',','')) || 0;
+            const total_pendiente= parseFloat(tr.children[3].textContent.replace('S/','').replace(',','')) || 0;
+            const total_recibido = parseFloat(tr.children[4].textContent.replace('S/','').replace(',','')) || 0;
+            const total_vuelto   = parseFloat(tr.children[5].textContent.replace('S/','').replace(',','')) || 0;
+            const fisico         = parseFloat(tr.querySelector('.fisico').value) || total_recibido;
+
+            cierresData.push({
+                tipopago,
+                total_ventas,
+                total_pagado,
+                total_pendiente,
+                total_recibido,
+                total_vuelto,
+                fisico
             });
-
-            fetch('../controllers/guardar_cierre.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({cierres: cierresData})
-            })
-            .then(res => res.json())
-            .then(res => {
-                if(res.ok){
-                    alert('Cierre guardado correctamente');
-                    location.reload();
-                } else {
-                    alert('Error: ' + res.error);
-                }
-            })
-            .catch(err => alert('Error de servidor: ' + err));
-
         });
-    }
+
+        fetch('../controllers/guardar_cierre.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({cierres: cierresData})
+        })
+        .then(res => res.json())
+        .then(res => {
+            if(res.ok){
+                alert('Cierre guardado correctamente');
+                location.reload();
+            } else {
+                alert('Error: ' + res.error);
+            }
+        })
+        .catch(err => alert('Error de servidor: ' + err));
+
+    });
+}
+
+
+
+
+
+
+
+
+
+
+
 
     // 🔹 Botones de acciones
     document.querySelectorAll('.imprimir-cierre').forEach(btn => {
