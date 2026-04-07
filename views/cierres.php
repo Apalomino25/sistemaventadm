@@ -16,6 +16,7 @@ try {
                COALESCE(SUM(vuelto),0) AS total_vuelto
         FROM ventas
         WHERE DATE(fecha) = :hoy
+        and estado = 1
         GROUP BY tipopago
     ");
 
