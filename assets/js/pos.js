@@ -1,3 +1,5 @@
+let enviando = false;
+
 // =======================
 // POS PRINCIPAL
 // =======================
@@ -189,13 +191,28 @@ function formatearPago(){
     inputPago.value = valor.toFixed(2);
 }
 
+
 function guardarVenta(){
+
+    // 🚫 Evitar múltiples envíos
+    if(enviando){
+        console.log("Ya se está enviando la venta...");
+        return;
+    }
+
+    enviando = true;
+
+    const btn = document.getElementById("btnGrabar");
+    btn.style.pointerEvents = "none";
+    btn.style.opacity = "0.5";
+
     const total = parseFloat(document.getElementById("total").value) || 0;
     const pago = parseFloat(document.getElementById("pago").value) || 0;
     const vuelto = parseFloat(document.getElementById("vuelto").value) || 0;
     const tipoPago = document.getElementById("tipoPago").value;
     const estadoPago = document.getElementById("estadoPago").value;
-    const filas = document.querySelectorAll("#tabla-ventas tr");  /// productos
+
+    const filas = document.querySelectorAll("#tabla-ventas tr");
     let productos = [];
 
     filas.forEach(fila => {
@@ -207,8 +224,10 @@ function guardarVenta(){
         });
     });
 
+    // 🔴 Validaciones
     if(productos.length === 0){
         alert("No hay productos en la venta");
+        resetBoton(btn);
         return;
     }
 
@@ -219,27 +238,42 @@ function guardarVenta(){
 
     if(pago < total){
         alert("El pago no puede ser menor al total");
+        resetBoton(btn);
         return;
     }
-    
-    // enviando datos a controlador en php
+
+    // 🟢 (Opcional PRO) Token único
+    const token = Date.now() + "-" + Math.random();
+
+    console.log("DATA QUE SE ENVÍA:", {
+    total,
+    pago,
+    vuelto,
+    tipoPago,
+    estadoPago,
+    productos,
+    token
+});
 
     fetch("../controllers/guardar_venta.php",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({total, pago, vuelto, tipoPago,estadoPago,productos})
+        body:JSON.stringify({
+            total,
+            pago,
+            vuelto,
+            tipoPago,
+            estadoPago,
+            productos,
+            token // 🔥 importante si lo usas en backend
+        })
     })
-    
-
-    // .then(res => res.json())
-
-    .then(res => res.text())
-.then(data => {
-    console.log("RESPUESTA DEL PHP:", data);
-    return JSON.parse(data);
-})
+    .then(res => res.json())
     .then(json => {
+
         if(json.ok){
+
+            // 🧾 imprimir ticket
             const url = `http://localhost/sistemaventadm/ticket.php?id=${json.ventaID}`;
             let iframe = document.createElement("iframe");
             iframe.style.display = "none";
@@ -252,20 +286,37 @@ function guardarVenta(){
                 setTimeout(() => document.body.removeChild(iframe), 1000);
             };
 
-            // Limpiar POS
+            // 🧹 limpiar POS
             document.getElementById("tabla-ventas").innerHTML = "";
             document.getElementById("total").value = "0.00";
             document.getElementById("pago").value = "";
             document.getElementById("vuelto").value = "";
             document.getElementById("codigo").focus();
+
         } else {
             alert("Error al guardar venta: " + json.error);
         }
+
     })
     .catch(err => {
         console.error("Error:", err);
         alert("Error del servidor");
+    })
+    .finally(() => {
+        resetBoton(btn);
     });
+}
+
+
+
+
+
+
+
+function resetBoton(btn){
+    enviando = false;
+    btn.style.pointerEvents = "auto";
+    btn.style.opacity = "1";
 }
 
 // =======================
