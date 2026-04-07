@@ -128,9 +128,7 @@ try {
 <div class="cont-guardar-cierre">
     <button id="guardar-cierre">Guardar Cierre</button>
 </div>
-
-<br><br>
-
+<br>
 <h2>Detalle de Ganancia del Día</h2>
 
 <table id="tabla-ganancia">
@@ -190,7 +188,7 @@ $totalVentaGeneral = 0;
 </table>
 
 <!-- JS -->
-<script src="../assets/js/cierres.js"></script>
+<!-- <script src="../assets/js/cierres.js"></script> -->
 
 <script>
 console.log("INLINE JS FUNCIONA");
