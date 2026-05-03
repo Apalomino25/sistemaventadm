@@ -18,7 +18,7 @@ $categorias = $conn->query("
 
 $productos = $conn->query("
     SELECT p.productoID, p.codigo, p.nombre, p.descripcion, p.precioCompra,
-           p.precioVenta, p.stock, p.fechaVencimiento, p.estado,
+           p.precioVenta, p.stock, p.fechaVencimiento, p.estado, p.categoriaID,
            c.nombre AS categoria
     FROM productos p
     LEFT JOIN categoria c ON c.categoriaID = p.categoriaID
@@ -98,7 +98,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
     <div class="inventario-header">
         <div>
             <h2>Inventarios</h2>
-            <p>Registra cada ingreso como un lote independiente cuando cambie codigo, costo, precio o vencimiento. El POS lista primero los lotes que vencen antes cuando buscas por nombre.</p>
+            <p>Ingresa el codigo del producto. Si ya existe, el sistema cargara sus datos y podras editar el stock; si no existe, completa el formulario para crearlo.</p>
         </div>
     </div>
 
@@ -132,13 +132,30 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
     </div>
     <?php endif; ?>
 
-    <form id="formInventario" class="inventario-form">
-        <div class="campo">
-            <label>Codigo de barra</label>
-            <input type="text" name="codigo" autocomplete="off" required>
+    <div class="inventario-buscador">
+        <label for="codigoBusquedaInventario">Buscar por codigo de barra</label>
+        <div class="inventario-buscador-linea">
+            <input type="text" id="codigoBusquedaInventario" autocomplete="off" placeholder="Escanea o escribe el codigo">
+            <button type="button" id="btnBuscarInventario">Buscar</button>
+        </div>
+    </div>
+
+    <div id="mensajeInventario" class="mensaje-inventario nuevo">
+        Ingresa un codigo para buscar el producto.
+    </div>
+
+    <form id="formInventario" class="inventario-form inventario-form-resultado oculto">
+        <input type="hidden" name="productoID" id="productoID">
+        <input type="hidden" name="modo" id="modoInventario" value="crear">
+        <input type="hidden" name="codigo" id="codigoInventario">
+
+        <div id="productoEncontrado" class="producto-encontrado oculto">
+            <strong id="productoEncontradoNombre"></strong>
+            <span id="productoEncontradoDetalle"></span>
+            <span id="productoEncontradoStock"></span>
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Nombre producto</label>
             <input type="text" name="nombre" list="productosExistentes" required>
             <datalist id="productosExistentes">
@@ -148,12 +165,12 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
             </datalist>
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Descripcion</label>
             <input type="text" name="descripcion">
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Categoria</label>
             <select name="categoriaID" required>
                 <option value="">Seleccione</option>
@@ -163,22 +180,22 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
             </select>
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Precio compra</label>
             <input type="number" name="precioCompra" min="0.01" step="0.01" required>
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Precio venta</label>
             <input type="number" name="precioVenta" min="0.01" step="0.01" required>
         </div>
 
         <div class="campo">
-            <label>Cantidad / Stock</label>
+            <label id="labelStock">Cantidad / Stock inicial</label>
             <input type="number" name="stock" min="1" step="1" required>
         </div>
 
-        <div class="campo">
+        <div class="campo campo-crear">
             <label>Fecha vencimiento</label>
             <input type="date" name="fechaVencimiento" required>
         </div>
@@ -203,6 +220,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
                 <th>Vencimiento</th>
                 <th>Alerta</th>
                 <th>Estado</th>
+                <th>Accion</th>
             </tr>
         </thead>
         <tbody>
@@ -222,6 +240,13 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
                 <td><?= $p['fechaVencimiento'] ? date('d-m-Y', strtotime($p['fechaVencimiento'])) : '-' ?></td>
                 <td><span class="badge-alerta <?= htmlspecialchars($estadoLote['clase']) ?>"><?= htmlspecialchars($estadoLote['texto']) ?></span></td>
                 <td><?= intval($p['estado']) === 1 ? 'Activo' : 'Inactivo' ?></td>
+                <td>
+                    <button type="button"
+                            class="btn-editar-stock"
+                            data-producto-id="<?= intval($p['productoID']) ?>">
+                        Stock
+                    </button>
+                </td>
             </tr>
             <?php endforeach; ?>
         </tbody>
