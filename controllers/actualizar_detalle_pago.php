@@ -24,8 +24,9 @@ if(empty($_SESSION['usuarioID'])){
 $data = json_decode(file_get_contents('php://input'), true);
 $detalleID = intval($data['detalleID'] ?? 0);
 $tipoPago = strtolower(trim($data['tipoPago'] ?? ''));
+$monto = round(floatval($data['monto'] ?? 0), 2);
 
-if($detalleID <= 0 || !in_array($tipoPago, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
+if($detalleID <= 0 || $monto <= 0 || !in_array($tipoPago, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
     responderDetallePago(['ok' => false, 'error' => 'Datos invalidos.']);
 }
 
@@ -44,7 +45,7 @@ try {
     $conn->beginTransaction();
 
     $stmt = $conn->prepare("
-        SELECT d.detalleID, d.ventaID, d.subtotal, d.estadoPago, v.estado
+        SELECT d.detalleID, d.ventaID, d.subtotal, d.montoPagado, d.saldoPendiente, d.estadoPago, v.estado
         FROM detalleventa d
         INNER JOIN ventas v ON v.ventaID = d.ventaID
         WHERE d.detalleID = ?
@@ -59,18 +60,30 @@ try {
     if((int)$detalle['estado'] !== 1){
         throw new Exception('No se puede cobrar un producto de una venta anulada.');
     }
-    if($detalle['estadoPago'] !== 'pendiente'){
-        throw new Exception('Este producto no esta pendiente.');
+    if(!in_array($detalle['estadoPago'], ['pendiente', 'parcial'], true)){
+        throw new Exception('Este producto no tiene saldo pendiente.');
+    }
+    if($monto > floatval($detalle['saldoPendiente']) + 0.01){
+        throw new Exception('El monto supera el saldo pendiente.');
     }
 
     $fechaPago = date('Y-m-d H:i:s');
+    $nuevoMontoPagado = round(floatval($detalle['montoPagado']) + $monto, 2);
+    $nuevoSaldo = round(floatval($detalle['subtotal']) - $nuevoMontoPagado, 2);
+    if($nuevoSaldo < 0.01){
+        $nuevoSaldo = 0;
+    }
+    $nuevoEstado = $nuevoSaldo <= 0 ? 'pagado' : 'parcial';
+
     $update = $conn->prepare("
         UPDATE detalleventa
-        SET estadoPago = 'pagado',
+        SET estadoPago = ?,
+            montoPagado = ?,
+            saldoPendiente = ?,
             fechaPago = ?
         WHERE detalleID = ?
     ");
-    $update->execute([$fechaPago, $detalleID]);
+    $update->execute([$nuevoEstado, $nuevoMontoPagado, $nuevoSaldo, $fechaPago, $detalleID]);
 
     $insertPago = $conn->prepare("
         INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
@@ -79,7 +92,7 @@ try {
     $insertPago->execute([
         $detalle['ventaID'],
         $tipoPago,
-        $detalle['subtotal'],
+        $monto,
         $fechaPago
     ]);
 
@@ -87,7 +100,7 @@ try {
         SELECT COUNT(*)
         FROM detalleventa
         WHERE ventaID = ?
-          AND estadoPago = 'pendiente'
+          AND estadoPago IN ('pendiente', 'parcial')
     ");
     $stmtPendientes->execute([$detalle['ventaID']]);
     $pendientes = (int)$stmtPendientes->fetchColumn();
@@ -120,7 +133,7 @@ try {
         WHERE ventaID = ?
     ");
     $updateVenta->execute([
-        $pendientes === 0 ? 'pagado' : 'pendiente',
+        $pendientes === 0 ? 'pagado' : 'parcial',
         $pendientes,
         $fechaPago,
         $totalPagos,
