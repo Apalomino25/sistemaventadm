@@ -35,7 +35,8 @@ document.addEventListener("click", () => {
 
 
 function cargarPagina(pagina){
-    fetch(pagina)
+    const separador = pagina.includes("?") ? "&" : "?";
+    fetch(`${pagina}${separador}_=${Date.now()}`)
         .then(res => res.text())
         .then(data => {
             document.getElementById("contenido").innerHTML = data;
