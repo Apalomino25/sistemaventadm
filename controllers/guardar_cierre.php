@@ -119,6 +119,42 @@ try {
     ");
     $stmt->execute([$hoy, $hoy, $hoy, $hoy]);
     $resumenes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $resumenes = array_values(array_filter($resumenes, function($resumen){
+        return strtolower(trim($resumen['tipopago'] ?? '')) !== 'pendiente';
+    }));
+
+    $stmtCostosCierre = $conn->prepare("
+        SELECT
+            vp.tipoPago AS tipopago,
+            COALESCE(SUM(CASE WHEN v.total > 0 THEN (vp.monto / v.total) * costos.total_compra ELSE 0 END), 0) AS total_compra,
+            COALESCE(SUM(CASE WHEN v.total > 0 THEN vp.monto - ((vp.monto / v.total) * costos.total_compra) ELSE 0 END), 0) AS total_ganancia
+        FROM venta_pagos vp
+        INNER JOIN ventas v ON v.ventaID = vp.ventaID
+        INNER JOIN (
+            SELECT d.ventaID, COALESCE(SUM(d.cantidad * p.precioCompra), 0) AS total_compra
+            FROM detalleventa d
+            INNER JOIN productos p ON p.productoID = d.productoID
+            GROUP BY d.ventaID
+        ) costos ON costos.ventaID = v.ventaID
+        WHERE DATE(vp.fechaPago) = ?
+          AND vp.estado = 1
+          AND v.estado = 1
+        GROUP BY vp.tipoPago
+    ");
+    $stmtCostosCierre->execute([$hoy]);
+    $costosPorTipo = [];
+    foreach($stmtCostosCierre->fetchAll(PDO::FETCH_ASSOC) as $costoTipo){
+        $costosPorTipo[strtolower(trim($costoTipo['tipopago']))] = $costoTipo;
+    }
+
+    foreach($resumenes as &$resumen){
+        $tipo = strtolower(trim($resumen['tipopago'] ?? ''));
+        if(isset($costosPorTipo[$tipo])){
+            $resumen['total_compra'] = $costosPorTipo[$tipo]['total_compra'];
+            $resumen['total_ganancia'] = $costosPorTipo[$tipo]['total_ganancia'];
+        }
+    }
+    unset($resumen);
 
     if(empty($resumenes)){
         responder([
