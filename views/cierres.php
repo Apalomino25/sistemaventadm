@@ -7,6 +7,7 @@ $hoy = date('Y-m-d');
 $cierreRealizado = false;
 $cierres = [];
 $detalleGanancia = [];
+$totalPendienteDia = 0;
 
 try {
     asegurarColumnasPagos($conn);
@@ -92,17 +93,68 @@ try {
 
     $cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    if(!$cierreRealizado){
+        $totalPendienteDia = array_reduce($cierres, function($total, $cierre){
+            return $total + (strtolower(trim($cierre['tipopago'] ?? '')) === 'pendiente'
+                ? floatval($cierre['total_pendiente'] ?? 0)
+                : 0);
+        }, 0.0);
+
+        $cierres = array_values(array_filter($cierres, function($cierre){
+            return strtolower(trim($cierre['tipopago'] ?? '')) !== 'pendiente';
+        }));
+
+        $stmtCostosCierre = $conn->prepare("
+            SELECT
+                vp.tipoPago AS tipopago,
+                COALESCE(SUM(CASE WHEN v.total > 0 THEN (vp.monto / v.total) * costos.total_compra ELSE 0 END), 0) AS total_compra,
+                COALESCE(SUM(CASE WHEN v.total > 0 THEN vp.monto - ((vp.monto / v.total) * costos.total_compra) ELSE 0 END), 0) AS total_ganancia
+            FROM venta_pagos vp
+            INNER JOIN ventas v ON v.ventaID = vp.ventaID
+            INNER JOIN (
+                SELECT d.ventaID, COALESCE(SUM(d.cantidad * p.precioCompra), 0) AS total_compra
+                FROM detalleventa d
+                INNER JOIN productos p ON p.productoID = d.productoID
+                GROUP BY d.ventaID
+            ) costos ON costos.ventaID = v.ventaID
+            WHERE DATE(vp.fechaPago) = ?
+              AND vp.estado = 1
+              AND v.estado = 1
+            GROUP BY vp.tipoPago
+        ");
+        $stmtCostosCierre->execute([$hoy]);
+        $costosPorTipo = [];
+        foreach($stmtCostosCierre->fetchAll(PDO::FETCH_ASSOC) as $costoTipo){
+            $costosPorTipo[strtolower(trim($costoTipo['tipopago']))] = $costoTipo;
+        }
+
+        foreach($cierres as &$cierre){
+            $tipo = strtolower(trim($cierre['tipopago'] ?? ''));
+            if(isset($costosPorTipo[$tipo])){
+                $cierre['total_compra'] = $costosPorTipo[$tipo]['total_compra'];
+                $cierre['total_ganancia'] = $costosPorTipo[$tipo]['total_ganancia'];
+            }
+        }
+        unset($cierre);
+    }
+
     $stmtGanancia = $conn->prepare("
-        SELECT p.nombre, d.cantidad, p.precioCompra, d.precioUnitario AS precioVenta,
-               d.montoPagado AS totalVenta,
-               CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * (p.precioCompra * d.cantidad) ELSE 0 END AS totalCompra,
-               CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * ((d.precioUnitario - p.precioCompra) * d.cantidad) ELSE 0 END AS ganancia
-        FROM detalleventa d
+        SELECT
+            p.nombre,
+            SUM(CASE WHEN v.total > 0 THEN d.cantidad * (vp.monto / v.total) ELSE 0 END) AS cantidad,
+            p.precioCompra,
+            d.precioUnitario AS precioVenta,
+            SUM(CASE WHEN v.total > 0 THEN d.subtotal * (vp.monto / v.total) ELSE 0 END) AS totalVenta,
+            SUM(CASE WHEN v.total > 0 THEN (d.cantidad * p.precioCompra) * (vp.monto / v.total) ELSE 0 END) AS totalCompra,
+            SUM(CASE WHEN v.total > 0 THEN (d.subtotal - (d.cantidad * p.precioCompra)) * (vp.monto / v.total) ELSE 0 END) AS ganancia
+        FROM venta_pagos vp
+        INNER JOIN ventas v ON v.ventaID = vp.ventaID
+        INNER JOIN detalleventa d ON d.ventaID = v.ventaID
         INNER JOIN productos p ON d.productoID = p.productoID
-        INNER JOIN ventas v ON d.ventaID = v.ventaID
-        WHERE DATE(d.fechaPago) = ?
-          AND d.estadoPago = 'pagado'
+        WHERE DATE(vp.fechaPago) = ?
+          AND vp.estado = 1
           AND v.estado = 1
+        GROUP BY p.productoID, p.nombre, p.precioCompra, d.precioUnitario
         ORDER BY p.nombre
     ");
     $stmtGanancia->execute([$hoy]);
@@ -150,6 +202,10 @@ foreach($cierres as $c){
         <div class="cierre-aviso">No hay ventas activas hoy para cerrar.</div>
     <?php else: ?>
         <div class="cierre-aviso pendiente">Revisa los montos fisicos antes de guardar. Al cerrar, ya no se podran registrar ventas hoy.</div>
+    <?php endif; ?>
+
+    <?php if(!$cierreRealizado && $totalPendienteDia > 0): ?>
+        <div class="cierre-aviso pendiente">Saldo pendiente del dia: S/ <?= number_format($totalPendienteDia, 2, '.', '') ?>. No se suma al fisico ni a los medios de pago del cierre.</div>
     <?php endif; ?>
 
     <table id="tabla-cierres">
@@ -240,7 +296,7 @@ foreach($cierres as $c){
             <?php foreach($detalleGanancia as $d): ?>
             <tr>
                 <td><?= htmlspecialchars($d['nombre']) ?></td>
-                <td><?= intval($d['cantidad']) ?></td>
+                <td><?= number_format($d['cantidad'], 2, '.', '') ?></td>
                 <td>S/ <?= number_format($d['precioCompra'], 2, '.', '') ?></td>
                 <td>S/ <?= number_format($d['precioVenta'], 2, '.', '') ?></td>
                 <td>S/ <?= number_format($d['totalCompra'], 2, '.', '') ?></td>
