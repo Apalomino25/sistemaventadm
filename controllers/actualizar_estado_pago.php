@@ -24,9 +24,14 @@ if(($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'){
 $data = json_decode(file_get_contents('php://input'), true);
 $ventaID = intval($data['ventaID'] ?? 0);
 $estadoPago = strtolower(trim($data['estadoPago'] ?? ''));
+$tipoPago = strtolower(trim($data['tipoPago'] ?? ''));
 
 if($ventaID <= 0 || !in_array($estadoPago, ['pagado', 'pendiente'], true)){
     responderEstadoPago(['ok' => false, 'error' => 'Datos invalidos.']);
+}
+
+if($estadoPago === 'pagado' && !in_array($tipoPago, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
+    responderEstadoPago(['ok' => false, 'error' => 'Seleccione el tipo de pago del saldo.']);
 }
 
 try {
@@ -59,8 +64,8 @@ try {
         throw new Exception('No se puede cambiar el pago de una venta anulada.');
     }
 
-    if($venta['estadoPago'] !== 'pendiente'){
-        throw new Exception('Solo las ventas pendientes permiten editar el estado de pago.');
+    if(!in_array($venta['estadoPago'], ['pendiente', 'parcial'], true)){
+        throw new Exception('Solo las ventas pendientes o parciales permiten editar el estado de pago.');
     }
 
     if($estadoPago === 'pendiente'){
@@ -95,7 +100,7 @@ try {
             INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
             VALUES (?, ?, ?, ?, 1)
         ");
-        $insertPago->execute([$ventaID, $venta['tipoPago'] ?: 'efectivo', $saldoPendiente, $fechaPago]);
+        $insertPago->execute([$ventaID, $tipoPago, $saldoPendiente, $fechaPago]);
     }
 
     $stmtTotalPagos = $conn->prepare("
@@ -107,22 +112,37 @@ try {
     $stmtTotalPagos->execute([$ventaID]);
     $totalPagos = (float)$stmtTotalPagos->fetchColumn();
 
+    $stmtTipoVenta = $conn->prepare("
+        SELECT
+            COUNT(DISTINCT tipoPago) AS totalTipos,
+            MIN(tipoPago) AS tipoUnico
+        FROM venta_pagos
+        WHERE ventaID = ?
+          AND estado = 1
+    ");
+    $stmtTipoVenta->execute([$ventaID]);
+    $tipoVenta = $stmtTipoVenta->fetch(PDO::FETCH_ASSOC);
+    $tipoPagoVenta = ((int)($tipoVenta['totalTipos'] ?? 0) > 1)
+        ? 'mixto'
+        : ($tipoVenta['tipoUnico'] ?: $tipoPago);
+
     $update = $conn->prepare("
         UPDATE ventas
         SET estadoPago = 'pagado',
             fechaPago = ?,
             pago = ?,
-            vuelto = 0
+            vuelto = 0,
+            tipoPago = ?
         WHERE ventaID = ?
           AND estado = 1
     ");
-    $update->execute([$fechaPago, $totalPagos, $ventaID]);
+    $update->execute([$fechaPago, $totalPagos, $tipoPagoVenta, $ventaID]);
 
     $conn->commit();
 
     responderEstadoPago([
         'ok' => true,
-        'message' => 'Estado de pago actualizado. Esta boleta entrara en el cierre de hoy.'
+        'message' => 'Estado de pago actualizado. El saldo entrara en el cierre de hoy como ' . $tipoPago . '.'
     ]);
 } catch(Throwable $e){
     if(isset($conn) && $conn->inTransaction()){
