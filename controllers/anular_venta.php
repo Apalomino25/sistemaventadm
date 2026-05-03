@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once "../config/conexion.php";
+require_once "../config/schema_helpers.php";
 
 // Recibir JSON
 $data = json_decode(file_get_contents("php://input"), true);
@@ -13,6 +14,7 @@ if (!$data || !isset($data['ventaID'])) {
 $ventaID = intval($data['ventaID']);
 
 try {
+    asegurarColumnasPagos($conn);
 
     $conn->beginTransaction();
 
@@ -35,6 +37,14 @@ try {
     
     $stmt->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
     $stmt->execute();
+
+    $stmtPagos = $conn->prepare("
+        UPDATE venta_pagos
+        SET estado = 0
+        WHERE ventaID = :ventaID
+    ");
+    $stmtPagos->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
+    $stmtPagos->execute();
 
     $detalles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
