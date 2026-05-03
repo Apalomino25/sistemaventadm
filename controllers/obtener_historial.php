@@ -19,7 +19,7 @@ if($fechaDesde !== '' && $fechaHasta !== ''){
     $params[':fechaHasta'] = $fechaHasta;
 }
 
-if(in_array($estadoPagoFiltro, ['pagado', 'pendiente'], true)){
+if(in_array($estadoPagoFiltro, ['pagado', 'pendiente', 'parcial'], true)){
     $where[] = "v.estadoPago = :estadoPago";
     $params[':estadoPago'] = $estadoPagoFiltro;
 }
@@ -66,6 +66,7 @@ echo "<table class='tabla-ventas'>
                 <th>Vuelto</th>
                 <th>Tipo Pago</th>
                 <th>Estado Pago</th>
+                <th>Pago saldo</th>
                 <th>Estado</th>
                 <th>Accion</th>
             </tr>
@@ -84,13 +85,29 @@ foreach($data as $row){
             <td>".htmlspecialchars($row['tipoPago'])."</td>
             <td>";
 
-    if((int)$row['estado'] === 1 && $row['estadoPago'] === 'pendiente'){
-        echo "<select class='editar-estado-pago' data-id='".intval($row['ventaID'])."'>
-                <option value='pendiente' selected>Pendiente</option>
+    if((int)$row['estado'] === 1 && in_array($row['estadoPago'], ['pendiente', 'parcial'], true)){
+        $estadoActual = htmlspecialchars($row['estadoPago']);
+        $estadoTexto = ucfirst($estadoActual);
+        echo "<select class='editar-estado-pago' data-id='".intval($row['ventaID'])."' data-estado-actual='{$estadoActual}'>
+                <option value='{$estadoActual}' selected>{$estadoTexto}</option>
                 <option value='pagado'>Pagado</option>
               </select>";
     } else {
         echo htmlspecialchars($row['estadoPago']);
+    }
+
+    echo "</td>
+            <td>";
+
+    if((int)$row['estado'] === 1 && in_array($row['estadoPago'], ['pendiente', 'parcial'], true)){
+        echo "<select class='tipo-pago-saldo' data-id='".intval($row['ventaID'])."'>
+                <option value='efectivo'>Efectivo</option>
+                <option value='yape'>Yape</option>
+                <option value='plin'>Plin</option>
+                <option value='transferencia'>Transferencia</option>
+              </select>";
+    } else {
+        echo "-";
     }
 
     echo "</td>
