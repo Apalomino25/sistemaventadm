@@ -1,4 +1,11 @@
 let enviando = false;
+const CATEGORIA_PRECIO_EDITABLE_NOMBRE = "prodeditable";
+const CATEGORIA_PRECIO_EDITABLE_ID = 11;
+const MIN_CARACTERES_BUSQUEDA = 2;
+let busquedaTimer = null;
+let busquedaSecuencia = 0;
+let clienteTimer = null;
+let clienteGeneral = null;
 
 // =======================
 // POS PRINCIPAL
@@ -14,15 +21,47 @@ window.iniciarPOS = function() {
 
     if(!inputCodigo) return;
     inputCodigo.focus();
+    iniciarClientePOS();
 
     // Buscar producto al presionar Enter
-    inputCodigo.addEventListener("keypress", function(e){
+    inputCodigo.addEventListener("keydown", function(e){
         if(e.key === "Enter"){
-            const codigo = inputCodigo.value;
-            buscarProducto(codigo);
-            inputCodigo.value = "";
+            e.preventDefault();
+            clearTimeout(busquedaTimer);
+            const busqueda = inputCodigo.value.trim();
+            if(busqueda !== ""){
+                ocultarResultadosBusqueda();
+                buscarProducto(busqueda);
+            }
+        }
+
+        if(e.key === "Escape"){
+            ocultarResultadosBusqueda();
         }
     });
+
+    inputCodigo.addEventListener("input", function(){
+        const busqueda = inputCodigo.value.trim();
+        clearTimeout(busquedaTimer);
+
+        if(busqueda.length < MIN_CARACTERES_BUSQUEDA){
+            ocultarResultadosBusqueda();
+            return;
+        }
+
+        busquedaTimer = setTimeout(() => {
+            buscarProductosEnVivo(busqueda);
+        }, 250);
+    });
+
+    if(!window.posBusquedaDocumentListener){
+        document.addEventListener("click", function(e){
+            if(!e.target.closest(".busqueda")){
+                ocultarResultadosBusqueda();
+            }
+        });
+        window.posBusquedaDocumentListener = true;
+    }
 
     // Validación y cálculo de pago al presionar Enter
     if (inputPago) {
@@ -66,45 +105,310 @@ window.iniciarPOS = function() {
     const tipoPagoSelect = document.getElementById("tipoPago");
     if(tipoPagoSelect){
         tipoPagoSelect.addEventListener("change", function(){
-            const tipo = this.value;
-            const pagoInput = document.getElementById("pago");
-            const vueltoInput = document.getElementById("vuelto");
-            const total = parseFloat(document.getElementById("total").value) || 0;
-
-            if(tipo !== "efectivo"){
-                pagoInput.value = total.toFixed(2);
-                vueltoInput.value = "0.00";
-                pagoInput.setAttribute("readonly", true);
-            } else {
-                pagoInput.removeAttribute("readonly");
-                pagoInput.value = "";
-                vueltoInput.value = "";
-            }
+            actualizarCamposPago();
         });
+    }
+
+    const estadoPagoSelect = document.getElementById("estadoPago");
+    if(estadoPagoSelect){
+        estadoPagoSelect.addEventListener("change", actualizarCamposPago);
+        actualizarCamposPago();
     }
 };
 
 // =======================
 // FUNCIONES POS
 // =======================
-function buscarProducto(codigo){
-    fetch("../controllers/buscar_producto.php?codigo="+codigo)
+function buscarProducto(busqueda){
+    fetch("../controllers/buscar_producto.php?codigo=" + encodeURIComponent(busqueda))
     .then(res => res.json())
     .then(data => {
         if(data.error){
+            ocultarResultadosBusqueda();
             alert("Producto no encontrado");
+            return;
+        }
+
+        if(data.multiple && Array.isArray(data.productos)){
+            mostrarResultadosBusqueda(data.productos);
             return;
         }
 
          // 🔹 Verificar stock
             if(data.stock <= 0){
+                ocultarResultadosBusqueda();
                 alert("No hay stock disponible para este producto");
                 return; // detener ejecución
             }
     
+        ocultarResultadosBusqueda();
         agregarProductoTabla(data);
-        document.getElementById("codigo").focus();
+        const inputCodigo = document.getElementById("codigo");
+        inputCodigo.value = "";
+        inputCodigo.focus();
+    })
+    .catch(err => {
+        console.error("Error al buscar producto:", err);
+        alert("Error al buscar producto");
     });
+}
+
+function buscarProductosEnVivo(busqueda){
+    const secuenciaActual = ++busquedaSecuencia;
+
+    fetch("../controllers/buscar_producto.php?codigo=" + encodeURIComponent(busqueda))
+    .then(res => res.json())
+    .then(data => {
+        if(secuenciaActual !== busquedaSecuencia){
+            return;
+        }
+
+        const inputCodigo = document.getElementById("codigo");
+        if(!inputCodigo || inputCodigo.value.trim() !== busqueda){
+            return;
+        }
+
+        if(data.error){
+            mostrarMensajeBusqueda("Sin resultados");
+            return;
+        }
+
+        if(data.multiple && Array.isArray(data.productos)){
+            mostrarResultadosBusqueda(data.productos);
+            return;
+        }
+
+        mostrarResultadosBusqueda([data]);
+    })
+    .catch(err => {
+        console.error("Error en busqueda en vivo:", err);
+    });
+}
+
+function ocultarResultadosBusqueda(){
+    const contenedor = document.getElementById("resultadosBusqueda");
+    if(!contenedor) return;
+
+    busquedaSecuencia++;
+    contenedor.innerHTML = "";
+    contenedor.classList.remove("activo");
+}
+
+function mostrarMensajeBusqueda(mensaje){
+    const contenedor = document.getElementById("resultadosBusqueda");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    const item = document.createElement("div");
+    item.className = "resultado-producto sin-stock";
+    item.textContent = mensaje;
+
+    contenedor.appendChild(item);
+    contenedor.classList.add("activo");
+}
+
+function mostrarResultadosBusqueda(productos){
+    const contenedor = document.getElementById("resultadosBusqueda");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    productos.forEach(prod => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "resultado-producto";
+
+        if(Number(prod.stock) <= 0){
+            item.classList.add("sin-stock");
+        }
+
+        const info = document.createElement("span");
+        info.className = "resultado-info";
+
+        const nombre = document.createElement("strong");
+        nombre.textContent = prod.nombre || "";
+
+        const descripcion = document.createElement("span");
+        descripcion.textContent = prod.descripcion || "";
+
+        const meta = document.createElement("span");
+        meta.className = "resultado-meta";
+        meta.textContent = `Cod: ${prod.codigo || "-"} | Stock: ${prod.stock} | Vence: ${prod.fechaVencimiento || "-"} | S/ ${formatearMonto(prod.precioVenta)}`;
+
+        info.appendChild(nombre);
+        info.appendChild(descripcion);
+        info.appendChild(meta);
+
+        const accion = document.createElement("span");
+        accion.className = "resultado-accion";
+        accion.textContent = Number(prod.stock) <= 0 ? "Sin stock" : "+";
+
+        item.appendChild(info);
+        item.appendChild(accion);
+
+        item.addEventListener("click", function(){
+            if(Number(prod.stock) <= 0){
+                alert("No hay stock disponible para este producto");
+                return;
+            }
+
+            agregarProductoTabla(prod);
+            ocultarResultadosBusqueda();
+
+            const inputCodigo = document.getElementById("codigo");
+            inputCodigo.value = "";
+            inputCodigo.focus();
+        });
+
+        contenedor.appendChild(item);
+    });
+
+    contenedor.classList.add("activo");
+}
+
+function productoPermiteEditarPrecio(prod){
+    const categoriaNombre = String(prod.categoriaNombre || "").trim().toLowerCase();
+    return categoriaNombre === CATEGORIA_PRECIO_EDITABLE_NOMBRE || Number(prod.categoriaID) === CATEGORIA_PRECIO_EDITABLE_ID;
+}
+
+function formatearMonto(valor){
+    return (parseFloat(valor) || 0).toFixed(2);
+}
+
+function iniciarClientePOS(){
+    const input = document.getElementById("clienteNombre");
+    const idInput = document.getElementById("clienteID");
+    const btnGeneral = document.getElementById("btnClienteGeneral");
+    const btnNuevo = document.getElementById("btnNuevoCliente");
+    const formNuevo = document.getElementById("formNuevoCliente");
+    const btnCancelar = document.getElementById("btnCancelarCliente");
+
+    if(!input || !idInput || input.dataset.iniciado === "1") return;
+    input.dataset.iniciado = "1";
+    clienteGeneral = {
+        clienteID: idInput.value,
+        nombre: input.value
+    };
+
+    input.addEventListener("input", () => {
+        idInput.value = "";
+        clearTimeout(clienteTimer);
+        const q = input.value.trim();
+        if(q.length < 2){
+            ocultarResultadosClientes();
+            return;
+        }
+        clienteTimer = setTimeout(() => buscarClientes(q), 250);
+    });
+
+    input.addEventListener("keydown", e => {
+        if(e.key === "Escape"){
+            ocultarResultadosClientes();
+        }
+    });
+
+    if(btnGeneral){
+        btnGeneral.addEventListener("click", usarClienteGeneral);
+    }
+
+    if(btnNuevo && formNuevo){
+        btnNuevo.addEventListener("click", () => {
+            formNuevo.classList.toggle("oculto");
+            const nombre = formNuevo.querySelector("[name='nombre']");
+            if(nombre){
+                nombre.value = input.value.trim() && !idInput.value ? input.value.trim() : "";
+                nombre.focus();
+            }
+        });
+    }
+
+    if(btnCancelar && formNuevo){
+        btnCancelar.addEventListener("click", () => {
+            formNuevo.reset();
+            formNuevo.classList.add("oculto");
+        });
+    }
+}
+
+function seleccionarCliente(cliente){
+    const input = document.getElementById("clienteNombre");
+    const idInput = document.getElementById("clienteID");
+    if(!input || !idInput) return;
+
+    input.value = cliente.nombre || "";
+    idInput.value = cliente.clienteID || "";
+    ocultarResultadosClientes();
+}
+
+function usarClienteGeneral(){
+    if(clienteGeneral){
+        seleccionarCliente(clienteGeneral);
+    }
+}
+
+function ocultarResultadosClientes(){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.classList.remove("activo");
+}
+
+function buscarClientes(q){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+
+    fetch("../controllers/buscar_cliente.php?q=" + encodeURIComponent(q))
+    .then(res => res.json())
+    .then(data => {
+        const clientes = data.clientes || [];
+        contenedor.innerHTML = "";
+
+        if(clientes.length === 0){
+            const div = document.createElement("div");
+            div.className = "resultado-cliente vacio";
+            div.textContent = "Sin resultados. Puedes agregarlo con +";
+            contenedor.appendChild(div);
+            contenedor.classList.add("activo");
+            return;
+        }
+
+        clientes.forEach(cliente => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "resultado-cliente";
+            btn.innerHTML = `<strong>${cliente.nombre || ""}</strong><span>${cliente.tipoDocumento || ""} ${cliente.numeroDocumento || ""} ${cliente.telefono || ""}</span>`;
+            btn.addEventListener("click", () => seleccionarCliente(cliente));
+            contenedor.appendChild(btn);
+        });
+
+        contenedor.classList.add("activo");
+    })
+    .catch(err => console.error("Error al buscar clientes:", err));
+}
+
+function recalcularSubtotalFila(fila){
+    const cantidad = parseInt(fila.querySelector(".cantidad").textContent) || 0;
+    const precio = parseFloat(fila.querySelector(".precio").textContent) || 0;
+    fila.querySelector(".subtotal").textContent = (cantidad * precio).toFixed(2);
+}
+
+function editarPrecioFila(fila){
+    const precioCelda = fila.querySelector(".precio");
+    if(precioCelda.dataset.precioEditable !== "1") return;
+
+    let nuevoPrecio = prompt("Ingrese nuevo precio:", precioCelda.textContent);
+    if(nuevoPrecio === null) return;
+
+    nuevoPrecio = parseFloat(nuevoPrecio.replace(",", "."));
+    if(isNaN(nuevoPrecio) || nuevoPrecio <= 0){
+        alert("Precio invalido");
+        return;
+    }
+
+    precioCelda.textContent = nuevoPrecio.toFixed(2);
+    recalcularSubtotalFila(fila);
+    calcularTotal();
 }
 
 function agregarProductoTabla(prod){
@@ -118,15 +422,16 @@ function agregarProductoTabla(prod){
             let cantidad = parseInt(cantidadCelda.textContent) + 1;
             cantidadCelda.textContent = cantidad;
 
-            let precio = parseFloat(fila.querySelector(".precio").textContent);
-            fila.querySelector(".subtotal").textContent = (cantidad * precio).toFixed(2);
+            recalcularSubtotalFila(fila);
             calcularTotal();
             return;
         }
     }
 
     let cantidad = 1;
-    let subtotal = cantidad * prod.precioVenta;
+    let precio = parseFloat(prod.precioVenta) || 0;
+    let subtotal = cantidad * precio;
+    const precioEditable = productoPermiteEditarPrecio(prod);
 
     const fila = document.createElement("tr");
     fila.innerHTML = `
@@ -135,10 +440,11 @@ function agregarProductoTabla(prod){
         <td>${prod.descripcion}</td>
         <td>${prod.stock}</td>
         <td class="cantidad">${cantidad}</td>
-        <td class="precio">${prod.precioVenta}</td>
+        <td class="precio ${precioEditable ? "precio-editable" : ""}" data-precio-editable="${precioEditable ? "1" : "0"}" title="${precioEditable ? "Click para editar precio" : ""}">${formatearMonto(precio)}</td>
         <td class="subtotal">${subtotal.toFixed(2)}</td>
         <td class="acciones">
             <i class="fa-solid fa-pen editar"></i>
+            ${precioEditable ? '<i class="fa-solid fa-dollar-sign editar-precio" title="Editar precio"></i>' : ''}
             <i class="fa-solid fa-trash eliminar-item"></i>
         </td>
     `;  
@@ -154,11 +460,19 @@ function agregarProductoTabla(prod){
             alert("Cantidad inválida");
             return;
         }
-        let precio = parseFloat(fila.querySelector(".precio").textContent);
         fila.querySelector(".cantidad").textContent = nuevaCantidad;
-        fila.querySelector(".subtotal").textContent = (nuevaCantidad * precio).toFixed(2);
+        recalcularSubtotalFila(fila);
         calcularTotal();
     });
+
+    const btnEditarPrecio = fila.querySelector(".editar-precio");
+    if(btnEditarPrecio){
+        btnEditarPrecio.addEventListener("click", () => editarPrecioFila(fila));
+    }
+
+    if(precioEditable){
+        fila.querySelector(".precio").addEventListener("click", () => editarPrecioFila(fila));
+    }
 
     // ELIMINAR PRODUCTO
     fila.querySelector(".eliminar-item").addEventListener("click", function(){
@@ -175,6 +489,39 @@ function calcularTotal(){
     let total = 0;
     filas.forEach(fila => total += parseFloat(fila.children[6].textContent));
     document.getElementById("total").value = total.toFixed(2);
+
+    const tipoPagoSelect = document.getElementById("tipoPago");
+    const pagoInput = document.getElementById("pago");
+    const vueltoInput = document.getElementById("vuelto");
+    actualizarCamposPago();
+}
+
+function actualizarCamposPago(){
+    const tipoPagoSelect = document.getElementById("tipoPago");
+    const estadoPagoSelect = document.getElementById("estadoPago");
+    const pagoInput = document.getElementById("pago");
+    const vueltoInput = document.getElementById("vuelto");
+    const total = parseFloat(document.getElementById("total")?.value) || 0;
+
+    if(!tipoPagoSelect || !estadoPagoSelect || !pagoInput || !vueltoInput) return;
+
+    if(estadoPagoSelect.value === "pendiente"){
+        pagoInput.value = "0.00";
+        vueltoInput.value = "0.00";
+        pagoInput.setAttribute("readonly", true);
+        return;
+    }
+
+    if(tipoPagoSelect.value !== "efectivo"){
+        pagoInput.value = total.toFixed(2);
+        vueltoInput.value = "0.00";
+        pagoInput.setAttribute("readonly", true);
+    } else {
+        pagoInput.removeAttribute("readonly");
+        if(pagoInput.value === "0.00"){
+            pagoInput.value = "";
+        }
+    }
 }
 
 function calcularVuelto(){
@@ -191,6 +538,35 @@ function formatearPago(){
     inputPago.value = valor.toFixed(2);
 }
 
+function imprimirTicket(ventaID){
+    const url = `../ticket.php?id=${encodeURIComponent(ventaID)}&_=${Date.now()}`;
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = url;
+    document.body.appendChild(iframe);
+
+    iframe.onload = function() {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const texto = doc && doc.body ? doc.body.innerText.trim() : "";
+        const tieneErrorPhp = texto.includes("Fatal error") ||
+            texto.includes("Parse error") ||
+            texto.includes("Warning") ||
+            texto.startsWith("Error");
+
+        if(tieneErrorPhp){
+            alert("Error al generar ticket: " + texto.substring(0, 300));
+            document.body.removeChild(iframe);
+            return;
+        }
+
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 1000);
+        }, 300);
+    };
+}
+
 
 function guardarVenta(){
 
@@ -200,17 +576,23 @@ function guardarVenta(){
         return;
     }
 
+    const btn = document.getElementById("btnGrabar");
+    if(btn && btn.classList.contains("deshabilitado")){
+        alert("El cierre del dia ya fue realizado. No se pueden registrar mas ventas hoy.");
+        return;
+    }
+
     enviando = true;
 
-    const btn = document.getElementById("btnGrabar");
     btn.style.pointerEvents = "none";
     btn.style.opacity = "0.5";
 
     const total = parseFloat(document.getElementById("total").value) || 0;
-    const pago = parseFloat(document.getElementById("pago").value) || 0;
-    const vuelto = parseFloat(document.getElementById("vuelto").value) || 0;
+    let pago = parseFloat(document.getElementById("pago").value) || 0;
+    let vuelto = parseFloat(document.getElementById("vuelto").value) || 0;
     const tipoPago = document.getElementById("tipoPago").value;
     const estadoPago = document.getElementById("estadoPago").value;
+    const clienteID = parseInt(document.getElementById("clienteID")?.value) || 0;
 
     const filas = document.querySelectorAll("#tabla-ventas tr");
     let productos = [];
@@ -231,12 +613,19 @@ function guardarVenta(){
         return;
     }
 
-    if(tipoPago !== "efectivo"){
+    if(estadoPago === "pendiente"){
+        document.getElementById("pago").value = "0.00";
+        document.getElementById("vuelto").value = "0.00";
+        pago = 0;
+        vuelto = 0;
+    } else if(tipoPago !== "efectivo"){
         document.getElementById("pago").value = total.toFixed(2);
         document.getElementById("vuelto").value = "0.00";
+        pago = total;
+        vuelto = 0;
     }
 
-    if(pago < total){
+    if(estadoPago === "pagado" && pago < total){
         alert("El pago no puede ser menor al total");
         resetBoton(btn);
         return;
@@ -251,6 +640,7 @@ function guardarVenta(){
     vuelto,
     tipoPago,
     estadoPago,
+    clienteID,
     productos,
     token
 });
@@ -264,34 +654,42 @@ function guardarVenta(){
             vuelto,
             tipoPago,
             estadoPago,
+            clienteID,
             productos,
-            token // 🔥 importante si lo usas en backend
+            token // importante si lo usas en backend
         })
     })
-    .then(res => res.json())
+    .then(res => res.text())
+    .then(text => {
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.error("Respuesta no JSON de guardar_venta.php:", text);
+            throw new Error(text.trim() || "Respuesta invalida del servidor");
+        }
+    })
     .then(json => {
 
         if(json.ok){
 
             // 🧾 imprimir ticket
-            const url = `http://localhost/sistemaventadm/ticket.php?id=${json.ventaID}`;
-            let iframe = document.createElement("iframe");
-            iframe.style.display = "none";
-            iframe.src = url;
-            document.body.appendChild(iframe);
-
-            iframe.onload = function() {
-                iframe.contentWindow.focus();
-                iframe.contentWindow.print();
-                setTimeout(() => document.body.removeChild(iframe), 1000);
-            };
+            imprimirTicket(json.ventaID);
 
             // 🧹 limpiar POS
             document.getElementById("tabla-ventas").innerHTML = "";
             document.getElementById("total").value = "0.00";
             document.getElementById("pago").value = "";
             document.getElementById("vuelto").value = "";
+            document.getElementById("tipoPago").value = "efectivo";
+            document.getElementById("estadoPago").value = "pagado";
+            usarClienteGeneral();
+            actualizarCamposPago();
             document.getElementById("codigo").focus();
+
+            const contenedorHistorial = document.getElementById("contenedorHistorial");
+            if(contenedorHistorial && contenedorHistorial.innerHTML.trim() !== ""){
+                cargarHistorialVentas();
+            }
 
         } else {
             alert("Error al guardar venta: " + json.error);
@@ -300,7 +698,7 @@ function guardarVenta(){
     })
     .catch(err => {
         console.error("Error:", err);
-        alert("Error del servidor");
+        alert("Error del servidor: " + err.message.substring(0, 300));
     })
     .finally(() => {
         resetBoton(btn);
@@ -325,7 +723,7 @@ function resetBoton(btn){
 function cargarHistorialVentas() {
     const contenedor = document.getElementById("contenedorHistorial");
 
-    fetch("../controllers/obtener_historial.php")
+    fetch(`../controllers/obtener_historial.php?_=${Date.now()}`)
         .then(res => res.text())
         .then(data => {
             contenedor.innerHTML = data;
@@ -349,7 +747,7 @@ document.addEventListener("click", function(e) {
 if (e.target.classList.contains("ver")) {
     const id = e.target.dataset.id;
 
-    fetch(`/sistemaventaDM/controllers/ver_detalle.php?id=${id}`)
+    fetch(`../controllers/ver_detalle.php?id=${id}`)
         .then(res => res.text())
         .then(html => {
             // Eliminar cualquier detalle anterior
@@ -370,17 +768,7 @@ if (e.target.classList.contains("ver")) {
 
     if (e.target.classList.contains("imprimir")) {
         const id = e.target.dataset.id;
-        const url = `http://localhost/sistemaventadm/ticket.php?id=${id}`;
-        let iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = url;
-        document.body.appendChild(iframe);
-
-        iframe.onload = function() {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 1000);
-        };
+        imprimirTicket(id);
     }
 
     if (e.target.classList.contains("eliminar")) {
@@ -512,6 +900,126 @@ window.initCierres = function() {
 
 
 
+window.initCierres = function() {
+    const btnGuardar = document.getElementById('guardar-cierre');
+    if(!btnGuardar) return;
+
+    const inputsFisico = document.querySelectorAll('.fisico');
+
+    function formatearNumero(valor){
+        return (parseFloat(valor) || 0).toFixed(2);
+    }
+
+    function actualizarObservaciones(){
+        let sumaFisico = 0;
+        let sumaDiferencia = 0;
+
+        inputsFisico.forEach(input => {
+            const totalRecibido = parseFloat(input.dataset.total) || 0;
+            const fisico = parseFloat(String(input.value).replace(/[^\d.-]/g,'')) || 0;
+            const diferencia = fisico - totalRecibido;
+            const fila = input.closest('tr');
+            const obs = fila ? fila.querySelector('.obs') : null;
+            const difTd = fila ? fila.querySelector('.diferencia') : null;
+
+            sumaFisico += fisico;
+            sumaDiferencia += diferencia;
+
+            if(difTd){
+                difTd.textContent = 'S/ ' + formatearNumero(diferencia);
+            }
+
+            if(obs){
+                if(Math.abs(diferencia) < 0.01){
+                    obs.textContent = 'Correcto';
+                    obs.style.color = 'green';
+                } else if(diferencia < 0){
+                    obs.textContent = 'Faltante';
+                    obs.style.color = 'red';
+                } else {
+                    obs.textContent = 'Sobrante';
+                    obs.style.color = 'orange';
+                }
+            }
+        });
+
+        const totalFisico = document.getElementById('totalFisico');
+        const totalDiferencia = document.getElementById('totalDiferencia');
+
+        if(totalFisico){
+            totalFisico.textContent = 'S/ ' + formatearNumero(sumaFisico);
+        }
+
+        if(totalDiferencia){
+            totalDiferencia.textContent = 'S/ ' + formatearNumero(sumaDiferencia);
+        }
+    }
+
+    inputsFisico.forEach(input => {
+        if(input.hasAttribute('readonly')) return;
+
+        input.addEventListener('input', () => {
+            input.value = input.value
+                .replace(/[^\d.]/g,'')
+                .replace(/(\..*)\./g, '$1');
+            actualizarObservaciones();
+        });
+
+        input.addEventListener('blur', () => {
+            input.value = formatearNumero(input.value);
+            actualizarObservaciones();
+        });
+    });
+
+    actualizarObservaciones();
+
+    btnGuardar.addEventListener('click', () => {
+        if(btnGuardar.disabled) return;
+
+        if(!confirm('¿Guardar el cierre diario? Luego no se podrán registrar más ventas hoy.')){
+            return;
+        }
+
+        const cierresData = [];
+        inputsFisico.forEach(input => {
+            const fisico = parseFloat(String(input.value).replace(/[^\d.-]/g,'')) || 0;
+            cierresData.push({
+                tipopago: input.dataset.tipopago,
+                fisico
+            });
+        });
+
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+
+        fetch('../controllers/guardar_cierre.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({cierres: cierresData})
+        })
+        .then(res => res.json())
+        .then(res => {
+            if(res.ok){
+                alert(res.message || 'Cierre guardado correctamente');
+                if(typeof cargarPagina === 'function'){
+                    cargarPagina('historial_cierre.php');
+                } else {
+                    location.reload();
+                }
+            } else {
+                alert('Error: ' + res.error);
+                btnGuardar.disabled = false;
+                btnGuardar.textContent = 'Guardar Cierre';
+            }
+        })
+        .catch(err => {
+            alert('Error de servidor: ' + err);
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar Cierre';
+        });
+    });
+};
+
 //  JS PARA HISTORUAL DE CIERRES */ 
 
 
@@ -530,9 +1038,8 @@ document.addEventListener("click", function(e) {
 
                 // Insertar nuevo modal
                 const modal = document.createElement('div');
-                modal.classList.add('detalle-cierre-modal');
                 modal.innerHTML = html; // Contiene estilos inline y botón de cerrar
-                document.body.appendChild(modal);
+                document.body.appendChild(modal.firstElementChild || modal);
             })
             .catch(err => console.error("Error al ver detalle del cierre:", err));
     }
@@ -541,7 +1048,7 @@ document.addEventListener("click", function(e) {
     
     if (e.target.classList.contains("imprimir-cierre")) {
         const id = e.target.dataset.id;
-        const url = `../ticket_cierre.php?id=${id}`;
+        const url = `../ticket_cierre.php?id=${encodeURIComponent(id)}`;
         const iframe = document.createElement("iframe");
         iframe.style.display = "none";
         iframe.src = url;
@@ -567,8 +1074,11 @@ document.addEventListener("click", function(e) {
             .then(data => {
                 if(data.success){
                     alert("Cierre anulado correctamente");
-                    // Recargar tabla
-                    location.reload();
+                    if(typeof cargarPagina === 'function'){
+                        cargarPagina('historial_cierre.php');
+                    } else {
+                        location.reload();
+                    }
                 } else {
                     alert("Error: " + data.error);
                 }
@@ -597,4 +1107,109 @@ document.addEventListener("click", function(e) {
 document.addEventListener("DOMContentLoaded", () => {
     iniciarPOS();
     initCierres();
+});
+
+document.addEventListener("submit", function(e) {
+    const formCliente = e.target.closest("#formNuevoCliente");
+    if(formCliente){
+        e.preventDefault();
+        const btn = formCliente.querySelector("button[type='submit']");
+        const data = Object.fromEntries(new FormData(formCliente).entries());
+
+        if(btn){
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+        }
+
+        fetch("../controllers/guardar_cliente.php", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(json => {
+            if(json.ok){
+                seleccionarCliente(json.cliente);
+                formCliente.reset();
+                formCliente.classList.add("oculto");
+                alert(json.message || "Cliente guardado");
+            } else {
+                alert("Error: " + json.error);
+            }
+        })
+        .catch(err => alert("Error de servidor: " + err))
+        .finally(() => {
+            if(btn){
+                btn.disabled = false;
+                btn.textContent = "Guardar cliente";
+            }
+        });
+        return;
+    }
+
+    const form = e.target.closest(".filtros-historial");
+    if(!form) return;
+
+    e.preventDefault();
+    const pagina = form.dataset.page || "historial.php";
+    const params = new URLSearchParams(new FormData(form)).toString();
+    const destino = params ? `${pagina}?${params}` : pagina;
+
+    if(typeof cargarPagina === "function"){
+        cargarPagina(destino);
+        return;
+    }
+
+    fetch(`${destino}${destino.includes("?") ? "&" : "?"}_=${Date.now()}`)
+        .then(res => res.text())
+        .then(html => {
+            const container = form.closest(".container") || document.body;
+            container.outerHTML = html;
+        })
+        .catch(err => alert("Error al filtrar: " + err));
+});
+
+document.addEventListener("change", function(e) {
+    if(!e.target.classList.contains("editar-estado-pago")) return;
+
+    const select = e.target;
+    const ventaID = select.dataset.id;
+    const estadoPago = select.value;
+
+    if(estadoPago !== "pagado"){
+        return;
+    }
+
+    if(!confirm("Marcar esta boleta pendiente como pagada hoy? Entrara en el cierre de hoy.")){
+        select.value = "pendiente";
+        return;
+    }
+
+    select.disabled = true;
+
+    fetch("../controllers/actualizar_estado_pago.php", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ventaID, estadoPago})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.ok){
+            alert(data.message || "Estado de pago actualizado");
+            if(typeof cargarPagina === "function"){
+                cargarPagina("historial.php");
+            } else {
+                cargarHistorialVentas();
+            }
+        } else {
+            alert("Error: " + data.error);
+            select.disabled = false;
+            select.value = "pendiente";
+        }
+    })
+    .catch(err => {
+        alert("Error de servidor: " + err);
+        select.disabled = false;
+        select.value = "pendiente";
+    });
 });
