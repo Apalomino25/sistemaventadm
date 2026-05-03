@@ -1,60 +1,118 @@
 <?php
 require_once __DIR__ . '/../config/conexion.php';
+require_once __DIR__ . '/../config/schema_helpers.php';
 
 date_default_timezone_set('America/Lima');
 $hoy = date('Y-m-d');
+$cierreRealizado = false;
+$cierres = [];
+$detalleGanancia = [];
 
 try {
+    asegurarColumnasPagos($conn);
 
-    // --- Consulta cierres por tipo de pago ---
-    $stmt = $conn->prepare("
-        SELECT tipopago, 
-               COALESCE(SUM(total),0) AS total_ventas, 
-               COALESCE(SUM(CASE WHEN estadoPago = 'pagado' THEN total ELSE 0 END),0) AS total_pagado,
-               COALESCE(SUM(CASE WHEN estadoPago = 'pendiente' THEN total ELSE 0 END),0) AS total_pendiente,
-               COALESCE(SUM(pago),0) AS total_recibido,
-               COALESCE(SUM(vuelto),0) AS total_vuelto
-        FROM ventas
-        WHERE DATE(fecha) = :hoy
-        and estado = 1
-        GROUP BY tipopago
-    ");
+    $stmtCierre = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = ? AND estado = 1");
+    $stmtCierre->execute([$hoy]);
+    $cierreRealizado = $stmtCierre->fetchColumn() > 0;
 
-    $stmt->execute([':hoy' => $hoy]);
-    $cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Totales
-    $suma_total = $suma_pagado = $suma_pendiente = $suma_recibido = $suma_vuelto = 0;
-    foreach($cierres as $c){
-        $suma_total += $c['total_ventas'];
-        $suma_pagado += $c['total_pagado'];
-        $suma_pendiente += $c['total_pendiente'];
-        $suma_recibido += $c['total_recibido'];
-        $suma_vuelto += $c['total_vuelto'];
+    if($cierreRealizado){
+        $stmt = $conn->prepare("
+            SELECT tipopago, total_ventas, total_pagado, total_pendiente, total_pendientes_cobrados, total_recibido,
+                   total_vuelto, total_compra, total_ganancia, fisico, diferencia, observacion
+            FROM cierres
+            WHERE fecha = ? AND estado = 1
+            ORDER BY tipopago
+        ");
+        $stmt->execute([$hoy]);
+    } else {
+        $stmt = $conn->prepare("
+            SELECT
+                vt.tipopago,
+                vt.total_ventas,
+                vt.total_pagado,
+                vt.total_pendiente,
+                vt.total_pendientes_cobrados,
+                vt.total_recibido,
+                vt.total_vuelto,
+                COALESCE(gt.total_compra, 0) AS total_compra,
+                COALESCE(gt.total_ganancia, 0) AS total_ganancia,
+                vt.total_recibido AS fisico,
+                0.00 AS diferencia,
+                'Correcto' AS observacion
+            FROM (
+                SELECT
+                    tipoPago AS tipopago,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_ventas,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_pagado,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pendiente' AND DATE(fecha) = ? THEN total ELSE 0 END), 0) AS total_pendiente,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? AND DATE(fecha) < ? THEN total ELSE 0 END), 0) AS total_pendientes_cobrados,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_recibido,
+                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN vuelto ELSE 0 END), 0) AS total_vuelto
+                FROM ventas
+                WHERE estado = 1
+                  AND (
+                      (estadoPago = 'pagado' AND DATE(fechaPago) = ?)
+                      OR (estadoPago = 'pendiente' AND DATE(fecha) = ?)
+                  )
+                GROUP BY tipoPago
+            ) vt
+            LEFT JOIN (
+                SELECT
+                    v.tipoPago AS tipopago,
+                    COALESCE(SUM(d.cantidad * p.precioCompra), 0) AS total_compra,
+                    COALESCE(SUM((d.precioUnitario - p.precioCompra) * d.cantidad), 0) AS total_ganancia
+                FROM ventas v
+                INNER JOIN detalleventa d ON d.ventaID = v.ventaID
+                INNER JOIN productos p ON p.productoID = d.productoID
+                WHERE DATE(v.fechaPago) = ?
+                  AND v.estadoPago = 'pagado'
+                  AND v.estado = 1
+                GROUP BY v.tipoPago
+            ) gt ON gt.tipopago = vt.tipopago
+            ORDER BY vt.tipopago
+        ");
+        $stmt->execute([$hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy]);
     }
 
-    // --- Consulta ganancia ---
+    $cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     $stmtGanancia = $conn->prepare("
         SELECT p.nombre, d.cantidad, p.precioCompra, d.precioUnitario AS precioVenta,
+               d.subtotal AS totalVenta,
+               (p.precioCompra * d.cantidad) AS totalCompra,
                (d.precioUnitario - p.precioCompra) * d.cantidad AS ganancia
         FROM detalleventa d
-        JOIN productos p ON d.productoID = p.productoID
-        JOIN ventas v ON d.ventaID = v.ventaID
-        WHERE DATE(v.fecha) = :hoy
+        INNER JOIN productos p ON d.productoID = p.productoID
+        INNER JOIN ventas v ON d.ventaID = v.ventaID
+        WHERE DATE(v.fechaPago) = ?
+          AND v.estadoPago = 'pagado'
           AND v.estado = 1
         ORDER BY p.nombre
     ");
-
-    $stmtGanancia->execute([':hoy' => $hoy]);
+    $stmtGanancia->execute([$hoy]);
     $detalleGanancia = $stmtGanancia->fetchAll(PDO::FETCH_ASSOC);
-
-    $totalGanancia = 0;
-    foreach($detalleGanancia as $d){
-        $totalGanancia += $d['ganancia'];
-    }
 
 } catch(PDOException $e) {
     die("Error: " . $e->getMessage());
+}
+
+$totales = [
+    'total_ventas' => 0,
+    'total_pagado' => 0,
+    'total_pendiente' => 0,
+    'total_pendientes_cobrados' => 0,
+    'total_recibido' => 0,
+    'total_vuelto' => 0,
+    'total_compra' => 0,
+    'total_ganancia' => 0,
+    'fisico' => 0,
+    'diferencia' => 0
+];
+
+foreach($cierres as $c){
+    foreach($totales as $campo => $_){
+        $totales[$campo] += floatval($c[$campo] ?? 0);
+    }
 }
 ?>
 
@@ -63,180 +121,127 @@ try {
 <head>
 <meta charset="UTF-8">
 <title>Cierre de Caja</title>
-<link rel="stylesheet" href="../assets/css/cierres.css">
+<link rel="stylesheet" href="../assets/css/cierres.css?v=<?= filemtime(__DIR__ . '/../assets/css/cierres.css') ?>">
 </head>
 <body>
 
-<h2>Cierre del Día (<?= date('d-m-Y') ?>)</h2>
+<div class="cierres-container">
+    <h2>Cierre del Dia (<?= date('d-m-Y') ?>)</h2>
 
-<table id="tabla-cierres">
-<thead>
-<tr>
-    <th>Tipo de Pago</th>
-    <th>Total Ventas</th>
-    <th>Total Pagado</th>
-    <th>Total Pendiente</th>
-    <th>Total Recibido</th>
-    <th>Total Vuelto</th>
-    <th>Físico</th>
-    <th>Observación</th>
-    <th>Diferencia</th>
-</tr>
-</thead>
+    <?php if($cierreRealizado): ?>
+        <div class="cierre-aviso cerrado">El cierre de hoy ya fue realizado. Las ventas estan bloqueadas para este dia.</div>
+    <?php elseif(empty($cierres)): ?>
+        <div class="cierre-aviso">No hay ventas activas hoy para cerrar.</div>
+    <?php else: ?>
+        <div class="cierre-aviso pendiente">Revisa los montos fisicos antes de guardar. Al cerrar, ya no se podran registrar ventas hoy.</div>
+    <?php endif; ?>
 
-<tbody>
-<?php foreach($cierres as $c): ?>
-<tr>
-    <td><?= htmlspecialchars(strtoupper($c['tipopago'])) ?></td>
-    <td>S/ <?= number_format($c['total_ventas'],2,'.','') ?></td>
-    <td class="total-pagado">S/ <?= number_format($c['total_pagado'],2,'.','') ?></td>
-    <td>S/ <?= number_format($c['total_pendiente'],2,'.','') ?></td>
-    <td>S/ <?= number_format($c['total_recibido'],2,'.','') ?></td>
-    <td>S/ <?= number_format($c['total_vuelto'],2,'.','') ?></td>
+    <table id="tabla-cierres">
+        <thead>
+            <tr>
+                <th>Tipo Pago</th>
+                <th>Total Ventas</th>
+                <th>Pagado</th>
+                <th>Pendiente</th>
+                <th>Boletas Pend. Cobradas</th>
+                <th>Recibido</th>
+                <th>Vuelto</th>
+                <th>Compra</th>
+                <th>Ganancia</th>
+                <th>Fisico</th>
+                <th>Observacion</th>
+                <th>Diferencia</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach($cierres as $c): ?>
+            <tr>
+                <td><?= htmlspecialchars(strtoupper($c['tipopago'])) ?></td>
+                <td>S/ <?= number_format($c['total_ventas'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_pagado'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_pendiente'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_pendientes_cobrados'], 2, '.', '') ?></td>
+                <td class="total-recibido">S/ <?= number_format($c['total_recibido'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_vuelto'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_compra'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($c['total_ganancia'], 2, '.', '') ?></td>
+                <td>
+                    <input
+                        type="number"
+                        step="0.01"
+                        class="fisico"
+                        data-tipopago="<?= htmlspecialchars($c['tipopago']) ?>"
+                        data-total="<?= number_format($c['total_recibido'], 2, '.', '') ?>"
+                        value="<?= number_format($c['fisico'], 2, '.', '') ?>"
+                        <?= $cierreRealizado ? 'readonly' : '' ?>
+                    >
+                </td>
+                <td class="obs"><?= htmlspecialchars($c['observacion']) ?></td>
+                <td class="diferencia">S/ <?= number_format($c['diferencia'], 2, '.', '') ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+        <tfoot>
+            <tr>
+                <th>Total</th>
+                <th>S/ <?= number_format($totales['total_ventas'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_pagado'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_pendiente'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_pendientes_cobrados'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_recibido'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_vuelto'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_compra'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_ganancia'], 2, '.', '') ?></th>
+                <th id="totalFisico">S/ <?= number_format($totales['fisico'], 2, '.', '') ?></th>
+                <th></th>
+                <th id="totalDiferencia">S/ <?= number_format($totales['diferencia'], 2, '.', '') ?></th>
+            </tr>
+        </tfoot>
+    </table>
 
-    <td>
-        <input 
-            type="number"
-            step="0.01"
-            class="fisico"
-            data-tipopago="<?= htmlspecialchars($c['tipopago']) ?>"
-            data-total="<?= $c['total_pagado'] ?>"
-            value="<?= $c['total_pagado'] ?>"
-        >
-    </td>
+    <div class="cont-guardar-cierre">
+        <button
+            id="guardar-cierre"
+            <?= ($cierreRealizado || empty($cierres)) ? 'disabled' : '' ?>
+        >Guardar Cierre</button>
+    </div>
 
-    <td class="obs">Correcto</td>
-    <td class="diferencia">S/ 0.00</td>
-</tr>
-<?php endforeach; ?>
-</tbody>
+    <h2>Detalle de Ganancia del Dia</h2>
 
-<tfoot>
-<tr>
-    <th>Total</th>
-    <th>S/ <?= number_format($suma_total,2,'.','') ?></th>
-    <th>S/ <?= number_format($suma_pagado,2,'.','') ?></th>
-    <th>S/ <?= number_format($suma_pendiente,2,'.','') ?></th>
-    <th>S/ <?= number_format($suma_recibido,2,'.','') ?></th>
-    <th>S/ <?= number_format($suma_vuelto,2,'.','') ?></th>
-    <th id="totalFisico"><?= $suma_pagado ?></th>
-    <th></th>
-    <th id="totalDiferencia">S/ 0.00</th>
-</tr>
-</tfoot>
-</table>
-
-<div class="cont-guardar-cierre">
-    <button id="guardar-cierre">Guardar Cierre</button>
+    <table id="tabla-ganancia">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Precio Compra</th>
+                <th>Precio Venta</th>
+                <th>Total Compra</th>
+                <th>Total Venta</th>
+                <th>Ganancia</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach($detalleGanancia as $d): ?>
+            <tr>
+                <td><?= htmlspecialchars($d['nombre']) ?></td>
+                <td><?= intval($d['cantidad']) ?></td>
+                <td>S/ <?= number_format($d['precioCompra'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($d['precioVenta'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($d['totalCompra'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($d['totalVenta'], 2, '.', '') ?></td>
+                <td>S/ <?= number_format($d['ganancia'], 2, '.', '') ?></td>
+            </tr>
+            <?php endforeach; ?>
+            <tr>
+                <th colspan="4" style="text-align:right">Totales:</th>
+                <th>S/ <?= number_format($totales['total_compra'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_ventas'], 2, '.', '') ?></th>
+                <th>S/ <?= number_format($totales['total_ganancia'], 2, '.', '') ?></th>
+            </tr>
+        </tbody>
+    </table>
 </div>
-<br>
-<h2>Detalle de Ganancia del Día</h2>
 
-<table id="tabla-ganancia">
-<thead>
-<tr>
-    <th>Producto</th>
-    <th>Cantidad</th>
-    <th>Precio Compra</th>
-    <th>Precio Venta</th>
-    <th>Total Compra</th>
-    <th>Total Venta</th>
-    <th>Ganancia</th>
-</tr>
-</thead>
-
-<tbody>
-<?php 
-$totalCompraGeneral = 0;
-$totalVentaGeneral = 0;
-?>
-
-<?php foreach($detalleGanancia as $d): 
-    $totalCompra = $d['cantidad'] * $d['precioCompra'];
-    $totalVenta = $d['cantidad'] * $d['precioVenta'];
-    $totalCompraGeneral += $totalCompra;
-    $totalVentaGeneral += $totalVenta;
-?>
-
-<tr>
-    <td><?= htmlspecialchars($d['nombre']) ?></td>
-    <td><?= $d['cantidad'] ?></td>
-    <td>S/ <?= number_format($d['precioCompra'],2,'.','') ?></td>
-    <td>S/ <?= number_format($d['precioVenta'],2,'.','') ?></td>
-    <td>S/ <?= number_format($totalCompra,2,'.','') ?></td>
-    <td>S/ <?= number_format($totalVenta,2,'.','') ?></td>
-    <td>S/ <?= number_format($d['ganancia'],2,'.','') ?></td>
-</tr>
-
-<?php endforeach; ?>
-
-<tr>
-    <th colspan="5" style="text-align:right">Total Compras:</th>
-    <th colspan="2">S/ <?= number_format($totalCompraGeneral,2,'.','') ?></th>
-</tr>
-
-<tr>
-    <th colspan="5" style="text-align:right">Total Ventas:</th>
-    <th colspan="2">S/ <?= number_format($totalVentaGeneral,2,'.','') ?></th>
-</tr>
-
-<tr>
-    <th colspan="5" style="text-align:right">Total Ganancia:</th>
-    <th colspan="2">S/ <?= number_format($totalGanancia,2,'.','') ?></th>
-</tr>
-
-</tbody>
-</table>
-
-<!-- JS -->
-<!-- <script src="../assets/js/cierres.js"></script> -->
-
-<script>
-console.log("INLINE JS FUNCIONA");
-
-const inputsFisico = document.querySelectorAll('.fisico');
-const totalFisico = document.getElementById('totalFisico');
-const totalDiferencia = document.getElementById('totalDiferencia');
-
-function formatearNumero(num){
-    return parseFloat(num).toFixed(2);
-}
-
-inputsFisico.forEach(input => {
-    input.addEventListener('input', () => {
-
-        let suma = 0;
-        let sumaDiferencia = 0;
-
-        inputsFisico.forEach(i => {
-            const totalRecibido = parseFloat(i.dataset.total) || 0;
-            let fisico = parseFloat(i.value) || 0;
-            suma += fisico;
-
-            const obs = i.parentElement.nextElementSibling;
-            const difTd = obs.nextElementSibling; // columna diferencia
-
-            const diferencia = fisico - totalRecibido;
-            difTd.textContent = 'S/ ' + formatearNumero(diferencia);
-            sumaDiferencia += diferencia;
-
-            if(fisico === totalRecibido){
-                obs.textContent = 'Correcto';
-                obs.style.color = 'green';
-            } else if(fisico < totalRecibido){
-                obs.textContent = 'Faltante';
-                obs.style.color = 'red';
-            } else {
-                obs.textContent = 'Sobrante';
-                obs.style.color = 'orange';
-            }
-        });
-
-        totalFisico.textContent = formatearNumero(suma);
-        totalDiferencia.textContent = 'S/ ' + formatearNumero(sumaDiferencia);
-    });
-});
-</script>
-
+<script src="../assets/js/pos.js?v=<?= filemtime(__DIR__ . '/../assets/js/pos.js') ?>"></script>
 </body>
 </html>
