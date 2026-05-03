@@ -1,18 +1,46 @@
 <?php
 require_once "../config/conexion.php";
+require_once "../config/schema_helpers.php";
 
-// Traemos estado para mostrar activo/inactivo
-$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,v.tipoPago, v.estado , v.estadoPago
-        FROM 
-         ventas v
-        INNER JOIN 
-         clientes c ON v.clienteID = c.clienteID
-        WHERE
-          DATE(v.fecha) = CURDATE()
-        ORDER BY 
-         v.fecha DESC;";
+asegurarColumnasPagos($conn);
 
-$resultado = $conn->query($sql);
+$fechaDesde = $_GET['fecha_desde'] ?? date('Y-m-d');
+$fechaHasta = $_GET['fecha_hasta'] ?? date('Y-m-d');
+$estadoPagoFiltro = $_GET['estadoPago'] ?? '';
+$tipoPagoFiltro = $_GET['tipoPago'] ?? '';
+$estadoFiltro = $_GET['estado'] ?? '';
+
+$where = ["DATE(v.fecha) BETWEEN :fechaDesde AND :fechaHasta"];
+$params = [
+    ':fechaDesde' => $fechaDesde,
+    ':fechaHasta' => $fechaHasta
+];
+
+if(in_array($estadoPagoFiltro, ['pagado', 'pendiente'], true)){
+    $where[] = "v.estadoPago = :estadoPago";
+    $params[':estadoPago'] = $estadoPagoFiltro;
+}
+
+if(in_array($tipoPagoFiltro, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
+    $where[] = "v.tipoPago = :tipoPago";
+    $params[':tipoPago'] = $tipoPagoFiltro;
+}
+
+if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
+    $where[] = "v.estado = :estado";
+    $params[':estado'] = (int)$estadoFiltro;
+}
+
+$sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,
+               v.fechaPago, v.tipoPago, v.estado, v.estadoPago
+        FROM ventas v
+        INNER JOIN clientes c ON v.clienteID = c.clienteID
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY v.ventaID DESC";
+
+$stmt = $conn->prepare($sql);
+$stmt->execute($params);
+$resultado = $stmt;
 ?>
 
 <!DOCTYPE html>
@@ -26,12 +54,52 @@ $resultado = $conn->query($sql);
 <body>
 
 <div class="container">
+    <h2>Historial de Ventas</h2>
+
+    <form class="filtros-historial" data-page="historial.php">
+        <label>
+            Desde
+            <input type="date" name="fecha_desde" value="<?= htmlspecialchars($fechaDesde) ?>">
+        </label>
+        <label>
+            Hasta
+            <input type="date" name="fecha_hasta" value="<?= htmlspecialchars($fechaHasta) ?>">
+        </label>
+        <label>
+            Estado pago
+            <select name="estadoPago">
+                <option value="">Todos</option>
+                <option value="pagado" <?= $estadoPagoFiltro === 'pagado' ? 'selected' : '' ?>>Pagado</option>
+                <option value="pendiente" <?= $estadoPagoFiltro === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
+            </select>
+        </label>
+        <label>
+            Tipo pago
+            <select name="tipoPago">
+                <option value="">Todos</option>
+                <option value="efectivo" <?= $tipoPagoFiltro === 'efectivo' ? 'selected' : '' ?>>Efectivo</option>
+                <option value="yape" <?= $tipoPagoFiltro === 'yape' ? 'selected' : '' ?>>Yape</option>
+                <option value="plin" <?= $tipoPagoFiltro === 'plin' ? 'selected' : '' ?>>Plin</option>
+                <option value="transferencia" <?= $tipoPagoFiltro === 'transferencia' ? 'selected' : '' ?>>Transferencia</option>
+            </select>
+        </label>
+        <label>
+            Estado venta
+            <select name="estado">
+                <option value="">Todos</option>
+                <option value="1" <?= $estadoFiltro === '1' ? 'selected' : '' ?>>Activo</option>
+                <option value="0" <?= $estadoFiltro === '0' ? 'selected' : '' ?>>Anulado</option>
+            </select>
+        </label>
+        <button type="submit">Filtrar</button>
+    </form>
 
     <table class="tabla-ventas">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Fecha</th>
+                <th>Fecha Pago</th>
                 <th>Cliente</th>
                 <th>Pagado</th>
                 <th>Vuelto</th>
@@ -48,12 +116,22 @@ $resultado = $conn->query($sql);
             <tr class="<?= ($row['estado'] == 0) ? 'inactivo' : '' ?>">
                 <td><?= $row['ventaID'] ?></td>
                 <td><?= $row['fecha'] ?></td>
+                <td><?= $row['fechaPago'] ? $row['fechaPago'] : '-' ?></td>
                 <td><?= htmlspecialchars($row['cliente']) ?></td>
                 <td class="pago"><?= number_format($row['pago'],2) ?></td>
                 <td class="vuelto"><?= number_format($row['vuelto'],2) ?></td>
                 <td class="total"><?= number_format($row['total'],2) ?></td>
-                <td class="tipoPago"><?= ($row['tipoPago']) ?></td>
-                <td class="estadoPago"><?= ($row['estadoPago']) ?></td>
+                <td class="tipoPago"><?= htmlspecialchars($row['tipoPago']) ?></td>
+                <td class="estadoPago">
+                    <?php if($row['estado'] == 1 && $row['estadoPago'] === 'pendiente'): ?>
+                        <select class="editar-estado-pago" data-id="<?= $row['ventaID'] ?>">
+                            <option value="pendiente" selected>Pendiente</option>
+                            <option value="pagado">Pagado</option>
+                        </select>
+                    <?php else: ?>
+                        <?= htmlspecialchars($row['estadoPago']) ?>
+                    <?php endif; ?>
+                </td>
                 <td><?= ($row['estado'] == 1) ? 'Activo' : 'Anulado' ?></td>
                 <td class="acciones">
                     <i class="fa-solid fa-print imprimir" data-id="<?= $row['ventaID'] ?>"></i>
