@@ -1,11 +1,9 @@
 <?php
-
 ob_start();
 session_start();
 
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
-
 header('Content-Type: application/json');
 
 require "../config/conexion.php";
@@ -18,7 +16,6 @@ function responderJson($payload) {
     if(ob_get_length() !== false){
         ob_clean();
     }
-
     echo json_encode($payload);
     exit;
 }
@@ -26,42 +23,29 @@ function responderJson($payload) {
 $data = json_decode(file_get_contents("php://input"), true);
 
 if(!is_array($data)){
-    responderJson([
-        "ok"=>false,
-        "error"=>"No llegaron datos validos"
-    ]);
+    responderJson(["ok" => false, "error" => "No llegaron datos validos"]);
 }
 
 if(empty($_SESSION['usuarioID'])){
-    responderJson([
-        "ok"=>false,
-        "error"=>"Sesion expirada. Vuelve a iniciar sesion."
-    ]);
+    responderJson(["ok" => false, "error" => "Sesion expirada. Vuelve a iniciar sesion."]);
 }
 
-// 🔥 TOKEN (anti-duplicados)
 $token = $data["token"] ?? null;
-
 if(!$token){
-    responderJson([
-        "ok"=>false,
-        "error"=>"Token no enviado"
-    ]);
+    responderJson(["ok" => false, "error" => "Token no enviado"]);
 }
 
-// Datos de la venta
-$total = floatval($data["total"] ?? 0);
 $pago = floatval($data["pago"] ?? 0);
 $vuelto = floatval($data["vuelto"] ?? 0);
 $productos = $data["productos"] ?? [];
 $pagos = $data["pagos"] ?? [];
 $tipoPago = $data['tipoPago'] ?? 'efectivo';
-$estadoPago = $data['estadoPago'] ?? 'pagado';
 $clienteID = intval($data['clienteID'] ?? 0);
 $usuarioID = $_SESSION['usuarioID'];
 
 date_default_timezone_set('America/Lima');
 $hoy = date('Y-m-d');
+$fechaPago = null;
 
 try {
     asegurarColumnasPagos($conn);
@@ -77,27 +61,24 @@ try {
         throw new Exception("Cliente invalido");
     }
 
-    // 🔹 Validar si ya hay cierre del día
     $stmtCierre = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = :hoy AND estado = 1");
     $stmtCierre->execute([':hoy' => $hoy]);
-    $existeCierre = $stmtCierre->fetchColumn();
-
-    if($existeCierre > 0){
+    if((int)$stmtCierre->fetchColumn() > 0){
         responderJson([
             "ok" => false,
-            "error" => "No se puede registrar la venta. El cierre del día ya fue realizado."
+            "error" => "No se puede registrar la venta. El cierre del dia ya fue realizado."
         ]);
     }
 
-    // 🔹 Iniciar transacción
     $conn->beginTransaction();
 
-    $stmtProducto = $conn->prepare("SELECT p.precioVenta, p.categoriaID, p.stock,
-               c.nombre AS categoriaNombre
+    $stmtProducto = $conn->prepare("
+        SELECT p.precioVenta, p.categoriaID, p.stock, c.nombre AS categoriaNombre
         FROM productos p
         LEFT JOIN categoria c ON c.categoriaID = p.categoriaID
         WHERE p.productoID = ? AND p.estado = 1
-        FOR UPDATE");
+        FOR UPDATE
+    ");
 
     $productosValidados = [];
     $total = 0;
@@ -119,7 +100,7 @@ try {
         }
 
         if(intval($productoBD["stock"]) < $cantidad){
-            throw new Exception("Stock insuficiente para el producto ID ".$productoID);
+            throw new Exception("Stock insuficiente para el producto ID " . $productoID);
         }
 
         $categoriaNombre = strtolower(trim($productoBD["categoriaNombre"] ?? ""));
@@ -128,25 +109,38 @@ try {
         $precio = $precioEditable ? floatval($prod["precio"] ?? 0) : floatval($productoBD["precioVenta"]);
 
         if($precio <= 0){
-            throw new Exception("Precio invalido para el producto ID ".$productoID);
+            throw new Exception("Precio invalido para el producto ID " . $productoID);
         }
 
-        $subtotal = $cantidad * $precio;
-        $estadoDetallePago = strtolower(trim($prod['estadoPago'] ?? $estadoPago));
-        if(!in_array($estadoDetallePago, ['pagado', 'pendiente'], true)){
-            throw new Exception("Estado de pago invalido en producto");
+        $subtotal = round($cantidad * $precio, 2);
+        $montoPagado = round(floatval($prod['montoPagado'] ?? 0), 2);
+        if($montoPagado < 0){
+            $montoPagado = 0;
         }
+        if($montoPagado > $subtotal){
+            $montoPagado = $subtotal;
+        }
+
+        $saldoPendiente = round($subtotal - $montoPagado, 2);
+        if($montoPagado >= $subtotal - 0.01){
+            $estadoDetalle = 'pagado';
+        } elseif($montoPagado > 0){
+            $estadoDetalle = 'parcial';
+        } else {
+            $estadoDetalle = 'pendiente';
+        }
+
         $total += $subtotal;
-        if($estadoDetallePago === 'pagado'){
-            $totalDetallePagado += $subtotal;
-        }
+        $totalDetallePagado += $montoPagado;
 
         $productosValidados[] = [
             "productoID" => $productoID,
             "cantidad" => $cantidad,
             "precio" => $precio,
             "subtotal" => $subtotal,
-            "estadoPago" => $estadoDetallePago
+            "estadoPago" => $estadoDetalle,
+            "montoPagado" => $montoPagado,
+            "saldoPendiente" => $saldoPendiente
         ];
     }
 
@@ -154,20 +148,17 @@ try {
         throw new Exception("No hay productos en la venta");
     }
 
-    $estadoPago = strtolower(trim($estadoPago));
-    if(!in_array($estadoPago, ['pagado', 'pendiente'], true)){
-        throw new Exception("Estado de pago invalido");
-    }
-
-    $hayPendientesDetalle = $totalDetallePagado < $total - 0.01;
-    $estadoPago = $hayPendientesDetalle ? 'pendiente' : 'pagado';
+    $haySaldoPendiente = $totalDetallePagado < $total - 0.01;
+    $estadoPago = $haySaldoPendiente ? ($totalDetallePagado > 0 ? 'parcial' : 'pendiente') : 'pagado';
 
     $pagosValidados = [];
     $totalPagos = 0;
     foreach($pagos as $pagoItem){
         $tipoPagoItem = strtolower(trim($pagoItem['tipoPago'] ?? ''));
         $montoPagoItem = round(floatval($pagoItem['monto'] ?? 0), 2);
-        if($montoPagoItem <= 0) continue;
+        if($montoPagoItem <= 0){
+            continue;
+        }
         if(!in_array($tipoPagoItem, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
             throw new Exception("Tipo de pago invalido");
         }
@@ -180,34 +171,28 @@ try {
 
     if(!empty($pagosValidados)){
         if(abs($totalPagos - $totalDetallePagado) > 0.01){
-            throw new Exception("Los pagos deben sumar el total de productos pagados");
+            throw new Exception("Los pagos deben sumar el total abonado en productos");
         }
         $pago = $totalPagos;
         $vuelto = 0;
         $tipoPago = count($pagosValidados) > 1 ? 'mixto' : $pagosValidados[0]['tipoPago'];
-    } elseif($estadoPago === "pendiente"){
-        $pago = 0;
-        $vuelto = 0;
-        $fechaPago = null;
-    } elseif($tipoPago !== "efectivo"){
-        $pago = $total;
+    } elseif($totalDetallePagado > 0){
+        $pago = $totalDetallePagado;
         $vuelto = 0;
     } else {
-        if($pago < $total){
-            throw new Exception("El pago no puede ser menor al total");
-        }
-        $vuelto = $pago - $total;
+        $pago = 0;
+        $vuelto = 0;
     }
 
     if($totalDetallePagado > 0){
         $fechaPago = date('Y-m-d H:i:s');
     }
 
-    // 🔥 INSERT con token
-    $stmtVenta = $conn->prepare("INSERT INTO ventas
-    (fecha,clienteID,usuarioID,total,tipoComprobante,estado,pago,vuelto,tipopago,estadoPago,fechaPago,token)
-    VALUES (NOW(),?,?,?,?,?,?,?,?,?,?,?)");
-
+    $stmtVenta = $conn->prepare("
+        INSERT INTO ventas
+        (fecha, clienteID, usuarioID, total, tipoComprobante, estado, pago, vuelto, tipopago, estadoPago, fechaPago, token)
+        VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
     $stmtVenta->execute([
         $clienteID,
         $usuarioID,
@@ -218,24 +203,24 @@ try {
         $vuelto,
         $tipoPago,
         $estadoPago,
-        $fechaPago,
+        $estadoPago === 'pagado' ? $fechaPago : null,
         $token
     ]);
 
     $ventaID = $conn->lastInsertId();
 
-    // 🔹 Insertar detalle1
-    $stmtDetalle = $conn->prepare("INSERT INTO detalleventa
-    (ventaID,productoID,cantidad,precioUnitario,subtotal,estadoPago,fechaPago)
-    VALUES (?,?,?,?,?,?,?)");
-
-    // 🔹 Actualizar stock
-    $stmtStock = $conn->prepare("UPDATE productos
-    SET stock = stock - ?
-    WHERE productoID = ?");
+    $stmtDetalle = $conn->prepare("
+        INSERT INTO detalleventa
+        (ventaID, productoID, cantidad, precioUnitario, subtotal, estadoPago, montoPagado, saldoPendiente, fechaPago)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmtStock = $conn->prepare("
+        UPDATE productos
+        SET stock = stock - ?
+        WHERE productoID = ?
+    ");
 
     foreach($productosValidados as $prod){
-
         $stmtDetalle->execute([
             $ventaID,
             $prod["productoID"],
@@ -243,26 +228,15 @@ try {
             $prod["precio"],
             $prod["subtotal"],
             $prod["estadoPago"],
-            $prod["estadoPago"] === 'pagado' ? $fechaPago : null
+            $prod["montoPagado"],
+            $prod["saldoPendiente"],
+            $prod["montoPagado"] > 0 ? $fechaPago : null
         ]);
 
         $stmtStock->execute([
             $prod["cantidad"],
             $prod["productoID"]
         ]);
-    }
-
-    $conn->commit();
-
-    responderJson([
-        "ok"=>true,
-        "ventaID"=>$ventaID
-    ]);
-
-} catch(Throwable $e){
-
-    if(isset($conn) && $conn->inTransaction()){
-        $conn->rollBack();
     }
 
     if(!empty($pagosValidados)){
@@ -278,7 +252,7 @@ try {
                 $fechaPago
             ]);
         }
-    } elseif($estadoPago === 'pagado' && $pago > 0){
+    } elseif($pago > 0){
         $stmtPago = $conn->prepare("
             INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
             VALUES (?, ?, ?, ?, 1)
@@ -286,17 +260,22 @@ try {
         $stmtPago->execute([$ventaID, $tipoPago, $pago, $fechaPago]);
     }
 
-    // 🔥 Error por token duplicado
-    if($e->getCode() == 23000){
-        responderJson([
-            "ok"=>false,
-            "error"=>"Venta duplicada detectada"
-        ]);
-    } else {
-        responderJson([
-            "ok"=>false,
-            "error"=>$e->getMessage()
-        ]);
+    $conn->commit();
+
+    responderJson([
+        "ok" => true,
+        "ventaID" => $ventaID
+    ]);
+
+} catch(Throwable $e){
+    if(isset($conn) && $conn->inTransaction()){
+        $conn->rollBack();
     }
+
+    if($e->getCode() == 23000){
+        responderJson(["ok" => false, "error" => "Venta duplicada detectada"]);
+    }
+
+    responderJson(["ok" => false, "error" => $e->getMessage()]);
 }
 ?>
