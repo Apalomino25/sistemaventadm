@@ -111,9 +111,23 @@ window.iniciarPOS = function() {
 
     const estadoPagoSelect = document.getElementById("estadoPago");
     if(estadoPagoSelect){
-        estadoPagoSelect.addEventListener("change", actualizarCamposPago);
+        estadoPagoSelect.addEventListener("change", () => {
+            document.querySelectorAll(".estado-detalle-pago").forEach(select => {
+                select.value = estadoPagoSelect.value;
+            });
+            actualizarCamposPago();
+            actualizarPagoMixto();
+        });
         actualizarCamposPago();
     }
+
+    document.querySelectorAll(".pago-mixto").forEach(input => {
+        input.addEventListener("input", actualizarPagoMixto);
+        input.addEventListener("blur", () => {
+            input.value = formatearMonto(input.value);
+            actualizarPagoMixto();
+        });
+    });
 };
 
 // =======================
@@ -391,6 +405,7 @@ function recalcularSubtotalFila(fila){
     const cantidad = parseInt(fila.querySelector(".cantidad").textContent) || 0;
     const precio = parseFloat(fila.querySelector(".precio").textContent) || 0;
     fila.querySelector(".subtotal").textContent = (cantidad * precio).toFixed(2);
+    actualizarPagoMixto();
 }
 
 function editarPrecioFila(fila){
@@ -442,6 +457,12 @@ function agregarProductoTabla(prod){
         <td class="cantidad">${cantidad}</td>
         <td class="precio ${precioEditable ? "precio-editable" : ""}" data-precio-editable="${precioEditable ? "1" : "0"}" title="${precioEditable ? "Click para editar precio" : ""}">${formatearMonto(precio)}</td>
         <td class="subtotal">${subtotal.toFixed(2)}</td>
+        <td>
+            <select class="estado-detalle-pago">
+                <option value="pagado" selected>Pagado</option>
+                <option value="pendiente">Pendiente</option>
+            </select>
+        </td>
         <td class="acciones">
             <i class="fa-solid fa-pen editar"></i>
             ${precioEditable ? '<i class="fa-solid fa-dollar-sign editar-precio" title="Editar precio"></i>' : ''}
@@ -450,6 +471,11 @@ function agregarProductoTabla(prod){
     `;  
 
     tabla.appendChild(fila);
+
+    fila.querySelector(".estado-detalle-pago").addEventListener("change", () => {
+        sincronizarEstadoVentaPorDetalles();
+        actualizarPagoMixto();
+    });
 
     // EDITAR CANTIDAD
     fila.querySelector(".editar").addEventListener("click", function(){
@@ -494,6 +520,57 @@ function calcularTotal(){
     const pagoInput = document.getElementById("pago");
     const vueltoInput = document.getElementById("vuelto");
     actualizarCamposPago();
+    actualizarPagoMixto();
+}
+
+function obtenerTotalPagadoDetalle(){
+    let total = 0;
+    document.querySelectorAll("#tabla-ventas tr").forEach(fila => {
+        const estado = fila.querySelector(".estado-detalle-pago")?.value || "pagado";
+        if(estado === "pagado"){
+            total += parseFloat(fila.querySelector(".subtotal")?.textContent) || 0;
+        }
+    });
+    return total;
+}
+
+function obtenerPagosMixtos(){
+    const pagos = [];
+    document.querySelectorAll(".pago-mixto").forEach(input => {
+        const monto = parseFloat(input.value) || 0;
+        if(monto > 0){
+            pagos.push({
+                tipoPago: input.dataset.tipopago,
+                monto
+            });
+        }
+    });
+    return pagos;
+}
+
+function sumarPagosMixtos(){
+    return obtenerPagosMixtos().reduce((sum, pago) => sum + pago.monto, 0);
+}
+
+function actualizarPagoMixto(){
+    const pagoInput = document.getElementById("pago");
+    const vueltoInput = document.getElementById("vuelto");
+    const totalPagadoDetalle = obtenerTotalPagadoDetalle();
+    const totalPagos = sumarPagosMixtos();
+
+    if(pagoInput){
+        pagoInput.value = totalPagos > 0 ? totalPagos.toFixed(2) : pagoInput.value;
+    }
+    if(vueltoInput){
+        vueltoInput.value = Math.max(totalPagos - totalPagadoDetalle, 0).toFixed(2);
+    }
+}
+
+function sincronizarEstadoVentaPorDetalles(){
+    const estados = Array.from(document.querySelectorAll(".estado-detalle-pago")).map(s => s.value);
+    const estadoPagoSelect = document.getElementById("estadoPago");
+    if(!estadoPagoSelect || estados.length === 0) return;
+    estadoPagoSelect.value = estados.some(estado => estado === "pendiente") ? "pendiente" : "pagado";
 }
 
 function actualizarCamposPago(){
@@ -596,13 +673,17 @@ function guardarVenta(){
 
     const filas = document.querySelectorAll("#tabla-ventas tr");
     let productos = [];
+    const pagos = obtenerPagosMixtos();
+    const totalPagadoDetalle = obtenerTotalPagadoDetalle();
+    const totalPagosMixtos = sumarPagosMixtos();
 
     filas.forEach(fila => {
         productos.push({
             productoID: parseInt(fila.children[0].textContent),
             cantidad: parseInt(fila.children[4].textContent),
             precio: parseFloat(fila.children[5].textContent),
-            subtotal: parseFloat(fila.children[6].textContent)
+            subtotal: parseFloat(fila.children[6].textContent),
+            estadoPago: fila.querySelector(".estado-detalle-pago")?.value || "pagado"
         });
     });
 
@@ -613,7 +694,15 @@ function guardarVenta(){
         return;
     }
 
-    if(estadoPago === "pendiente"){
+    if(pagos.length > 0){
+        if(Math.abs(totalPagosMixtos - totalPagadoDetalle) > 0.01){
+            alert("Los pagos ingresados deben sumar S/ " + totalPagadoDetalle.toFixed(2) + " segun los productos marcados como pagados.");
+            resetBoton(btn);
+            return;
+        }
+        pago = totalPagosMixtos;
+        vuelto = 0;
+    } else if(estadoPago === "pendiente"){
         document.getElementById("pago").value = "0.00";
         document.getElementById("vuelto").value = "0.00";
         pago = 0;
@@ -641,6 +730,7 @@ function guardarVenta(){
     tipoPago,
     estadoPago,
     clienteID,
+    pagos,
     productos,
     token
 });
@@ -655,6 +745,7 @@ function guardarVenta(){
             tipoPago,
             estadoPago,
             clienteID,
+            pagos,
             productos,
             token // importante si lo usas en backend
         })
@@ -682,6 +773,7 @@ function guardarVenta(){
             document.getElementById("vuelto").value = "";
             document.getElementById("tipoPago").value = "efectivo";
             document.getElementById("estadoPago").value = "pagado";
+            document.querySelectorAll(".pago-mixto").forEach(input => input.value = "0.00");
             usarClienteGeneral();
             actualizarCamposPago();
             document.getElementById("codigo").focus();
@@ -789,6 +881,47 @@ if (e.target.classList.contains("ver")) {
                 }
             });
         }
+    }
+
+    if(e.target.classList.contains("marcar-detalle-pagado")){
+        const detalleID = e.target.dataset.id;
+        const tipoPago = prompt("Tipo de pago para este producto: efectivo, yape, plin o transferencia", "efectivo");
+        if(tipoPago === null) return;
+
+        const tipo = tipoPago.trim().toLowerCase();
+        if(!["efectivo", "yape", "plin", "transferencia"].includes(tipo)){
+            alert("Tipo de pago invalido");
+            return;
+        }
+
+        fetch("../controllers/actualizar_detalle_pago.php", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({detalleID, tipoPago: tipo})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.ok){
+                alert(data.message || "Producto pagado");
+                const modal = document.querySelector(".detalle-venta-modal");
+                const ventaTitulo = modal ? modal.querySelector("h2")?.textContent || "" : "";
+                const match = ventaTitulo.match(/#(\d+)/);
+                if(match){
+                    fetch(`../controllers/ver_detalle.php?id=${match[1]}`)
+                        .then(res => res.text())
+                        .then(html => {
+                            document.querySelector(".detalle-venta-modal")?.remove();
+                            document.querySelector(".detalle-venta-overlay")?.remove();
+                            const cont = document.createElement("div");
+                            cont.innerHTML = html;
+                            document.body.appendChild(cont);
+                        });
+                }
+            } else {
+                alert("Error: " + data.error);
+            }
+        })
+        .catch(err => alert("Error de servidor: " + err));
     }
 });
 
