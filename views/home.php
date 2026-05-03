@@ -1,6 +1,8 @@
 
 <?php
 session_start();
+$rolSesion = strtolower(trim((string)($_SESSION['rol'] ?? '')));
+$esAdmin = in_array($rolSesion, ['administrador', 'admin'], true);
 ?>
 
 <!DOCTYPE html>
@@ -9,7 +11,7 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Ventas</title>
-    <link rel="stylesheet" href="../assets/css/home.css">
+    <link rel="stylesheet" href="../assets/css/home.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/home.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 
@@ -63,10 +65,18 @@ session_start();
             <i class="fa-solid fa-chevron-down"></i>
         </button>
         <div class="dropdown-content">
-            <a href="#"><i class="fa-solid fa-receipt"></i> Ventas</a>
-            <a href="#"><i class="fa-solid fa-box"></i> Productos</a>
+            <a onclick="cargarPagina('reportes.php')"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+            <a onclick="cargarPagina('reportes.php')"><i class="fa-solid fa-box"></i> Productos y Clientes</a>
         </div>
     </div>
+
+    <?php if($esAdmin): ?>
+    <div class="dropdown">
+        <button class="menu-btn" onclick="cargarPagina('inventarios.php')">
+            <i class="fa-solid fa-boxes-stacked"></i> <span class="titulo-botones">INVENTARIOS</span>
+        </button>
+    </div>
+    <?php endif; ?>
 
     <div class="dropdown">
         <button class="menu-btn">
@@ -103,8 +113,9 @@ session_start();
 
 <main id="contenido"></main>
 
-<script src="../assets/js/pos.js"></script>
-<script src="../assets/js/home.js"></script>
+<script src="../assets/js/pos.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/pos.js'); ?>"></script>
+<script src="../assets/js/inventarios.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/inventarios.js'); ?>"></script>
+<script src="../assets/js/home.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/home.js'); ?>"></script>
 
 </body>
 </html>
