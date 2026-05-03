@@ -414,12 +414,17 @@ tr.inactivo{
     padding:7px 9px;
 }
 
-.estado-detalle-pago{
+.estado-detalle-pago,
+.monto-detalle-pagado{
     min-height:34px;
     border:1px solid #cfd5dc;
     border-radius:8px;
     padding:6px 8px;
     font-weight:700;
+}
+
+.monto-detalle-pagado{
+    width:96px;
 }
 
 #tipoPago,
