@@ -370,6 +370,58 @@ tr.inactivo{
     font-size:14px;
 }
 
+.pagos-mixtos{
+    grid-column:1 / -1;
+    padding:12px;
+    border:1px solid var(--color-borde);
+    border-radius:12px;
+    background:#fff;
+}
+
+.pagos-mixtos > label{
+    display:block;
+    margin-bottom:8px;
+    color:var(--color-muted);
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+}
+
+.pagos-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:10px;
+}
+
+.pagos-grid div{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+}
+
+.pagos-grid span,
+.pagos-mixtos small{
+    color:var(--color-muted);
+    font-size:12px;
+    font-weight:700;
+}
+
+.pagos-grid input{
+    width:100%;
+    min-height:36px;
+    border:1px solid #cfd5dc;
+    border-radius:8px;
+    padding:7px 9px;
+}
+
+.estado-detalle-pago{
+    min-height:34px;
+    border:1px solid #cfd5dc;
+    border-radius:8px;
+    padding:6px 8px;
+    font-weight:700;
+}
+
 #tipoPago,
 #estadoPago{
     font-weight:700;
