@@ -1,0 +1,30 @@
+.reportes-container{
+    padding:24px 30px;
+}
+
+.reportes-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(420px, 1fr));
+    gap:18px;
+}
+
+.reportes-grid section{
+    min-width:0;
+}
+
+.reportes-grid h3{
+    margin:8px 0 10px;
+}
+
+.reportes-grid td span{
+    color:#666;
+    font-size:12px;
+}
+
+.reporte-vacio{
+    padding:14px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    background:#fff;
+    color:#555;
+}
