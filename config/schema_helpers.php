@@ -11,6 +11,17 @@ function columnaExiste(PDO $conn, string $tabla, string $columna): bool {
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function tablaExiste(PDO $conn, string $tabla): bool {
+    $stmt = $conn->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+    ");
+    $stmt->execute([$tabla]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 function asegurarColumna(PDO $conn, string $tabla, string $columna, string $definicion): void {
     if(!columnaExiste($conn, $tabla, $columna)){
         $conn->exec("ALTER TABLE `$tabla` ADD COLUMN `$columna` $definicion");
@@ -20,12 +31,49 @@ function asegurarColumna(PDO $conn, string $tabla, string $columna, string $defi
 function asegurarColumnasPagos(PDO $conn): void {
     asegurarColumna($conn, 'ventas', 'fechaPago', 'DATETIME NULL AFTER estadoPago');
     asegurarColumna($conn, 'cierres', 'total_pendientes_cobrados', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pendiente');
+    asegurarColumna($conn, 'detalleventa', 'estadoPago', "VARCHAR(20) NOT NULL DEFAULT 'pagado' AFTER subtotal");
+    asegurarColumna($conn, 'detalleventa', 'fechaPago', 'DATETIME NULL AFTER estadoPago');
+
+    if(!tablaExiste($conn, 'venta_pagos')){
+        $conn->exec("
+            CREATE TABLE venta_pagos (
+                pagoID INT AUTO_INCREMENT PRIMARY KEY,
+                ventaID INT NOT NULL,
+                tipoPago VARCHAR(30) NOT NULL,
+                monto DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                fechaPago DATETIME NOT NULL,
+                estado TINYINT NOT NULL DEFAULT 1,
+                creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_venta_pagos_venta (ventaID),
+                INDEX idx_venta_pagos_fecha (fechaPago),
+                INDEX idx_venta_pagos_tipo (tipoPago)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+        ");
+    }
 
     $conn->exec("
         UPDATE ventas
         SET fechaPago = fecha
         WHERE estadoPago = 'pagado'
           AND fechaPago IS NULL
+    ");
+
+    $conn->exec("
+        UPDATE detalleventa d
+        INNER JOIN ventas v ON v.ventaID = d.ventaID
+        SET d.estadoPago = v.estadoPago,
+            d.fechaPago = v.fechaPago
+        WHERE d.fechaPago IS NULL
+    ");
+
+    $conn->exec("
+        INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
+        SELECT v.ventaID, v.tipoPago, v.pago, COALESCE(v.fechaPago, v.fecha), 1
+        FROM ventas v
+        LEFT JOIN venta_pagos vp ON vp.ventaID = v.ventaID
+        WHERE vp.pagoID IS NULL
+          AND v.estadoPago = 'pagado'
+          AND v.pago > 0
     ");
 }
 
