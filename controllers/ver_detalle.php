@@ -1,5 +1,8 @@
 <?php
 require "../config/conexion.php";
+require_once "../config/schema_helpers.php";
+
+asegurarColumnasPagos($conn);
 
 if (!isset($_GET['id'])) {
     echo "<p>Venta no válida</p>";
@@ -33,11 +36,14 @@ try {
 
     // 🔹 Obtener detalle de productos
     $sqlDetalle = "SELECT 
+                        dv.detalleID,
                         p.nombre,
                         p.descripcion,
                         dv.cantidad,
                         dv.precioUnitario,
-                        dv.subtotal
+                        dv.subtotal,
+                        dv.estadoPago,
+                        dv.fechaPago
                    FROM detalleventa dv
                    INNER JOIN productos p 
                        ON dv.productoID = p.productoID
@@ -101,6 +107,8 @@ try {
         <th style='padding:10px;'>Cantidad</th>
         <th style='padding:10px;'>Precio</th>
         <th style='padding:10px;'>Subtotal</th>
+        <th style='padding:10px;'>Estado</th>
+        <th style='padding:10px;'>Accion</th>
     </tr>";
 
     $totalCalculado = 0;
@@ -112,19 +120,27 @@ try {
                 <td style='padding:8px;'>{$row['cantidad']}</td>
                 <td style='padding:8px;'>S/ " . number_format($row['precioUnitario'], 2) . "</td>
                 <td style='padding:8px;'>S/ " . number_format($row['subtotal'], 2) . "</td>
+                <td style='padding:8px;'>" . htmlspecialchars($row['estadoPago']) . "</td>
+                <td style='padding:8px;'>";
+        if($row['estadoPago'] === 'pendiente'){
+            echo "<button type='button' class='marcar-detalle-pagado' data-id='{$row['detalleID']}' style='border:0;border-radius:6px;background:#FF1493;color:#fff;padding:6px 8px;cursor:pointer;'>Marcar pagado</button>";
+        } else {
+            echo htmlspecialchars($row['fechaPago'] ?? '');
+        }
+        echo "</td>
               </tr>";
     }
 
     echo "<tr style='font-weight:bold; background:#f2f2f2;'>
-            <td colspan='4' style='text-align:right; padding:8px;'>Total:</td>
+            <td colspan='6' style='text-align:right; padding:8px;'>Total:</td>
             <td style='padding:8px;'>S/ " . number_format($totalCalculado, 2) . "</td>
           </tr>";
     echo "<tr style='background:#f9f9f9;'>
-            <td colspan='4' style='text-align:right; padding:8px;'>Pago:</td>
+            <td colspan='6' style='text-align:right; padding:8px;'>Pago:</td>
             <td style='padding:8px;'>S/ " . number_format($venta['pago'], 2) . "</td>
           </tr>";
     echo "<tr style='background:#f9f9f9;'>
-            <td colspan='4' style='text-align:right; padding:8px;'>Vuelto:</td>
+            <td colspan='6' style='text-align:right; padding:8px;'>Vuelto:</td>
             <td style='padding:8px;'>S/ " . number_format($venta['vuelto'], 2) . "</td>
           </tr>";
     echo "</table>";
