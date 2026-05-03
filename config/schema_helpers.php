@@ -32,7 +32,9 @@ function asegurarColumnasPagos(PDO $conn): void {
     asegurarColumna($conn, 'ventas', 'fechaPago', 'DATETIME NULL AFTER estadoPago');
     asegurarColumna($conn, 'cierres', 'total_pendientes_cobrados', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pendiente');
     asegurarColumna($conn, 'detalleventa', 'estadoPago', "VARCHAR(20) NOT NULL DEFAULT 'pagado' AFTER subtotal");
-    asegurarColumna($conn, 'detalleventa', 'fechaPago', 'DATETIME NULL AFTER estadoPago');
+    asegurarColumna($conn, 'detalleventa', 'montoPagado', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER estadoPago');
+    asegurarColumna($conn, 'detalleventa', 'saldoPendiente', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER montoPagado');
+    asegurarColumna($conn, 'detalleventa', 'fechaPago', 'DATETIME NULL AFTER saldoPendiente');
 
     if(!tablaExiste($conn, 'venta_pagos')){
         $conn->exec("
@@ -62,8 +64,19 @@ function asegurarColumnasPagos(PDO $conn): void {
         UPDATE detalleventa d
         INNER JOIN ventas v ON v.ventaID = d.ventaID
         SET d.estadoPago = v.estadoPago,
+            d.montoPagado = CASE WHEN v.estadoPago = 'pagado' THEN d.subtotal ELSE 0 END,
+            d.saldoPendiente = CASE WHEN v.estadoPago = 'pagado' THEN 0 ELSE d.subtotal END,
             d.fechaPago = v.fechaPago
         WHERE d.fechaPago IS NULL
+    ");
+
+    $conn->exec("
+        UPDATE detalleventa d
+        INNER JOIN ventas v ON v.ventaID = d.ventaID
+        SET d.montoPagado = CASE WHEN v.estadoPago = 'pagado' THEN d.subtotal ELSE 0 END,
+            d.saldoPendiente = CASE WHEN v.estadoPago = 'pagado' THEN 0 ELSE d.subtotal END
+        WHERE d.montoPagado = 0
+          AND d.saldoPendiente = 0
     ");
 
     $conn->exec("
