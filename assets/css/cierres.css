@@ -10,12 +10,31 @@ body {
 }
 
 .cierres-container {
-    max-width: 900px;
+    max-width: 1180px;
     margin: auto;
     background-color: #fff;
     padding: 25px;
     border-radius: 10px;
     box-shadow: 0 0 15px rgba(0,0,0,0.1);
+}
+
+.cierre-aviso {
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #eef4ff;
+    color: #24436f;
+    font-weight: 600;
+}
+
+.cierre-aviso.pendiente {
+    background: #fff8e6;
+    color: #6c4c00;
+}
+
+.cierre-aviso.cerrado {
+    background: #eaf7ed;
+    color: #1f6b34;
 }
 
 h2 {
@@ -101,6 +120,11 @@ button#guardar-cierre {
 
 button#guardar-cierre:hover {
     background-color: #f03aaa;
+}
+
+button#guardar-cierre:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
 }
 
 
