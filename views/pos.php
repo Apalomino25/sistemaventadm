@@ -109,6 +109,8 @@
                     <th>Cantidad</th>
                     <th>Precio Venta</th>
                     <th>Subtotal</th>
+                    <th>Monto Pagado</th>
+                    <th>Saldo</th>
                     <th>Estado Pago</th>
                     <th>Acciones</th>
                 </tr>
