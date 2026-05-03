@@ -71,10 +71,10 @@ try {
     $fechaPago = date('Y-m-d H:i:s');
 
     $stmtPendiente = $conn->prepare("
-        SELECT COALESCE(SUM(subtotal), 0)
+        SELECT COALESCE(SUM(saldoPendiente), 0)
         FROM detalleventa
         WHERE ventaID = ?
-          AND estadoPago = 'pendiente'
+          AND estadoPago IN ('pendiente', 'parcial')
     ");
     $stmtPendiente->execute([$ventaID]);
     $saldoPendiente = (float)$stmtPendiente->fetchColumn();
@@ -82,9 +82,11 @@ try {
     $updateDetalle = $conn->prepare("
         UPDATE detalleventa
         SET estadoPago = 'pagado',
+            montoPagado = subtotal,
+            saldoPendiente = 0,
             fechaPago = ?
         WHERE ventaID = ?
-          AND estadoPago = 'pendiente'
+          AND estadoPago IN ('pendiente', 'parcial')
     ");
     $updateDetalle->execute([$fechaPago, $ventaID]);
 
