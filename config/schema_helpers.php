@@ -55,6 +55,17 @@ function asegurarColumnasPagos(PDO $conn): void {
 
     $conn->exec("
         UPDATE ventas
+        SET estadoPago = CASE
+            WHEN COALESCE(pago, 0) >= COALESCE(total, 0) THEN 'pagado'
+            WHEN COALESCE(pago, 0) > 0 THEN 'parcial'
+            ELSE 'pendiente'
+        END
+        WHERE estadoPago IS NULL
+           OR estadoPago = ''
+    ");
+
+    $conn->exec("
+        UPDATE ventas
         SET fechaPago = fecha
         WHERE estadoPago = 'pagado'
           AND fechaPago IS NULL
@@ -63,9 +74,9 @@ function asegurarColumnasPagos(PDO $conn): void {
     $conn->exec("
         UPDATE detalleventa d
         INNER JOIN ventas v ON v.ventaID = d.ventaID
-        SET d.estadoPago = v.estadoPago,
-            d.montoPagado = CASE WHEN v.estadoPago = 'pagado' THEN d.subtotal ELSE 0 END,
-            d.saldoPendiente = CASE WHEN v.estadoPago = 'pagado' THEN 0 ELSE d.subtotal END,
+        SET d.estadoPago = COALESCE(NULLIF(v.estadoPago, ''), 'pendiente'),
+            d.montoPagado = CASE WHEN COALESCE(NULLIF(v.estadoPago, ''), 'pendiente') = 'pagado' THEN d.subtotal ELSE 0 END,
+            d.saldoPendiente = CASE WHEN COALESCE(NULLIF(v.estadoPago, ''), 'pendiente') = 'pagado' THEN 0 ELSE d.subtotal END,
             d.fechaPago = v.fechaPago
         WHERE d.fechaPago IS NULL
     ");
@@ -73,20 +84,46 @@ function asegurarColumnasPagos(PDO $conn): void {
     $conn->exec("
         UPDATE detalleventa d
         INNER JOIN ventas v ON v.ventaID = d.ventaID
-        SET d.montoPagado = CASE WHEN v.estadoPago = 'pagado' THEN d.subtotal ELSE 0 END,
-            d.saldoPendiente = CASE WHEN v.estadoPago = 'pagado' THEN 0 ELSE d.subtotal END
+        SET d.montoPagado = CASE WHEN COALESCE(NULLIF(v.estadoPago, ''), 'pendiente') = 'pagado' THEN d.subtotal ELSE 0 END,
+            d.saldoPendiente = CASE WHEN COALESCE(NULLIF(v.estadoPago, ''), 'pendiente') = 'pagado' THEN 0 ELSE d.subtotal END
         WHERE d.montoPagado = 0
           AND d.saldoPendiente = 0
     ");
 
     $conn->exec("
         INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
-        SELECT v.ventaID, v.tipoPago, v.pago, COALESCE(v.fechaPago, v.fecha), 1
+        SELECT
+            v.ventaID,
+            v.tipoPago,
+            CASE
+                WHEN LOWER(COALESCE(v.tipoPago, '')) = 'efectivo'
+                    THEN GREATEST(COALESCE(v.pago, 0) - COALESCE(v.vuelto, 0), 0)
+                ELSE COALESCE(v.pago, 0)
+            END,
+            COALESCE(v.fechaPago, v.fecha),
+            1
         FROM ventas v
         LEFT JOIN venta_pagos vp ON vp.ventaID = v.ventaID
         WHERE vp.pagoID IS NULL
           AND v.estadoPago = 'pagado'
           AND v.pago > 0
+    ");
+
+    $conn->exec("
+        UPDATE venta_pagos vp
+        INNER JOIN ventas v ON v.ventaID = vp.ventaID
+        INNER JOIN (
+            SELECT ventaID, COUNT(*) AS total_pagos
+            FROM venta_pagos
+            WHERE estado = 1
+            GROUP BY ventaID
+        ) conteo ON conteo.ventaID = vp.ventaID
+        SET vp.monto = GREATEST(COALESCE(v.pago, 0) - COALESCE(v.vuelto, 0), 0)
+        WHERE vp.estado = 1
+          AND conteo.total_pagos = 1
+          AND LOWER(COALESCE(v.tipoPago, '')) = 'efectivo'
+          AND COALESCE(v.vuelto, 0) > 0
+          AND ABS(vp.monto - COALESCE(v.pago, 0)) < 0.01
     ");
 }
 
