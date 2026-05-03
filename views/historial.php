@@ -16,7 +16,7 @@ $params = [
     ':fechaHasta' => $fechaHasta
 ];
 
-if(in_array($estadoPagoFiltro, ['pagado', 'pendiente'], true)){
+if(in_array($estadoPagoFiltro, ['pagado', 'pendiente', 'parcial'], true)){
     $where[] = "v.estadoPago = :estadoPago";
     $params[':estadoPago'] = $estadoPagoFiltro;
 }
@@ -71,6 +71,7 @@ $resultado = $stmt;
                 <option value="">Todos</option>
                 <option value="pagado" <?= $estadoPagoFiltro === 'pagado' ? 'selected' : '' ?>>Pagado</option>
                 <option value="pendiente" <?= $estadoPagoFiltro === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
+                <option value="parcial" <?= $estadoPagoFiltro === 'parcial' ? 'selected' : '' ?>>Parcial</option>
             </select>
         </label>
         <label>
@@ -106,6 +107,7 @@ $resultado = $stmt;
                 <th>Total</th>
                 <th>TipoPago</th>
                 <th>EstadoPago</th>
+                <th>Pago saldo</th>
                 <th>Estado</th>
                 <th>Acción</th>
             </tr>
@@ -123,13 +125,25 @@ $resultado = $stmt;
                 <td class="total"><?= number_format($row['total'],2) ?></td>
                 <td class="tipoPago"><?= htmlspecialchars($row['tipoPago']) ?></td>
                 <td class="estadoPago">
-                    <?php if($row['estado'] == 1 && $row['estadoPago'] === 'pendiente'): ?>
-                        <select class="editar-estado-pago" data-id="<?= $row['ventaID'] ?>">
-                            <option value="pendiente" selected>Pendiente</option>
+                    <?php if($row['estado'] == 1 && in_array($row['estadoPago'], ['pendiente', 'parcial'], true)): ?>
+                        <select class="editar-estado-pago" data-id="<?= $row['ventaID'] ?>" data-estado-actual="<?= htmlspecialchars($row['estadoPago']) ?>">
+                            <option value="<?= htmlspecialchars($row['estadoPago']) ?>" selected><?= ucfirst(htmlspecialchars($row['estadoPago'])) ?></option>
                             <option value="pagado">Pagado</option>
                         </select>
                     <?php else: ?>
                         <?= htmlspecialchars($row['estadoPago']) ?>
+                    <?php endif; ?>
+                </td>
+                <td>
+                    <?php if($row['estado'] == 1 && in_array($row['estadoPago'], ['pendiente', 'parcial'], true)): ?>
+                        <select class="tipo-pago-saldo" data-id="<?= $row['ventaID'] ?>">
+                            <option value="efectivo">Efectivo</option>
+                            <option value="yape">Yape</option>
+                            <option value="plin">Plin</option>
+                            <option value="transferencia">Transferencia</option>
+                        </select>
+                    <?php else: ?>
+                        -
                     <?php endif; ?>
                 </td>
                 <td><?= ($row['estado'] == 1) ? 'Activo' : 'Anulado' ?></td>
