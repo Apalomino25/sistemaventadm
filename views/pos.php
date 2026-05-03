@@ -109,6 +109,7 @@
                     <th>Cantidad</th>
                     <th>Precio Venta</th>
                     <th>Subtotal</th>
+                    <th>Estado Pago</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -137,6 +138,17 @@
                     <option value="plin">Plin</option>
                     <option value="transferencia">Transferencia</option>
                 </select>
+            </div>
+
+            <div class="pagos-mixtos">
+                <label>Pagos de esta venta</label>
+                <div class="pagos-grid">
+                    <div><span>Efectivo</span><input type="number" step="0.01" min="0" id="pagoEfectivo" class="pago-mixto" data-tipopago="efectivo" value="0.00"></div>
+                    <div><span>Yape</span><input type="number" step="0.01" min="0" id="pagoYape" class="pago-mixto" data-tipopago="yape" value="0.00"></div>
+                    <div><span>Plin</span><input type="number" step="0.01" min="0" id="pagoPlin" class="pago-mixto" data-tipopago="plin" value="0.00"></div>
+                    <div><span>Transferencia</span><input type="number" step="0.01" min="0" id="pagoTransferencia" class="pago-mixto" data-tipopago="transferencia" value="0.00"></div>
+                </div>
+                <small>Si dejas productos pendientes, los pagos deben sumar solo los productos pagados.</small>
             </div>
 
             <div class="campoItem">
