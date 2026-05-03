@@ -43,7 +43,7 @@ try {
     $conn->beginTransaction();
 
     $stmt = $conn->prepare("
-        SELECT ventaID, total, estado, estadoPago, fechaPago
+        SELECT ventaID, total, estado, estadoPago, fechaPago, tipoPago
         FROM ventas
         WHERE ventaID = ?
         FOR UPDATE
@@ -68,17 +68,53 @@ try {
         responderEstadoPago(['ok' => true, 'message' => 'La venta ya estaba pendiente.']);
     }
 
+    $fechaPago = date('Y-m-d H:i:s');
+
+    $stmtPendiente = $conn->prepare("
+        SELECT COALESCE(SUM(subtotal), 0)
+        FROM detalleventa
+        WHERE ventaID = ?
+          AND estadoPago = 'pendiente'
+    ");
+    $stmtPendiente->execute([$ventaID]);
+    $saldoPendiente = (float)$stmtPendiente->fetchColumn();
+
+    $updateDetalle = $conn->prepare("
+        UPDATE detalleventa
+        SET estadoPago = 'pagado',
+            fechaPago = ?
+        WHERE ventaID = ?
+          AND estadoPago = 'pendiente'
+    ");
+    $updateDetalle->execute([$fechaPago, $ventaID]);
+
+    if($saldoPendiente > 0){
+        $insertPago = $conn->prepare("
+            INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
+            VALUES (?, ?, ?, ?, 1)
+        ");
+        $insertPago->execute([$ventaID, $venta['tipoPago'] ?: 'efectivo', $saldoPendiente, $fechaPago]);
+    }
+
+    $stmtTotalPagos = $conn->prepare("
+        SELECT COALESCE(SUM(monto), 0)
+        FROM venta_pagos
+        WHERE ventaID = ?
+          AND estado = 1
+    ");
+    $stmtTotalPagos->execute([$ventaID]);
+    $totalPagos = (float)$stmtTotalPagos->fetchColumn();
+
     $update = $conn->prepare("
         UPDATE ventas
         SET estadoPago = 'pagado',
-            fechaPago = NOW(),
-            pago = total,
+            fechaPago = ?,
+            pago = ?,
             vuelto = 0
         WHERE ventaID = ?
           AND estado = 1
-          AND estadoPago = 'pendiente'
     ");
-    $update->execute([$ventaID]);
+    $update->execute([$fechaPago, $totalPagos, $ventaID]);
 
     $conn->commit();
 
