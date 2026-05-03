@@ -42,6 +42,8 @@ try {
                         dv.cantidad,
                         dv.precioUnitario,
                         dv.subtotal,
+                        dv.montoPagado,
+                        dv.saldoPendiente,
                         dv.estadoPago,
                         dv.fechaPago
                    FROM detalleventa dv
@@ -107,6 +109,8 @@ try {
         <th style='padding:10px;'>Cantidad</th>
         <th style='padding:10px;'>Precio</th>
         <th style='padding:10px;'>Subtotal</th>
+        <th style='padding:10px;'>Pagado</th>
+        <th style='padding:10px;'>Saldo</th>
         <th style='padding:10px;'>Estado</th>
         <th style='padding:10px;'>Accion</th>
     </tr>";
@@ -120,10 +124,12 @@ try {
                 <td style='padding:8px;'>{$row['cantidad']}</td>
                 <td style='padding:8px;'>S/ " . number_format($row['precioUnitario'], 2) . "</td>
                 <td style='padding:8px;'>S/ " . number_format($row['subtotal'], 2) . "</td>
+                <td style='padding:8px;'>S/ " . number_format($row['montoPagado'], 2) . "</td>
+                <td style='padding:8px;'>S/ " . number_format($row['saldoPendiente'], 2) . "</td>
                 <td style='padding:8px;'>" . htmlspecialchars($row['estadoPago']) . "</td>
                 <td style='padding:8px;'>";
-        if($row['estadoPago'] === 'pendiente'){
-            echo "<button type='button' class='marcar-detalle-pagado' data-id='{$row['detalleID']}' style='border:0;border-radius:6px;background:#FF1493;color:#fff;padding:6px 8px;cursor:pointer;'>Marcar pagado</button>";
+        if(in_array($row['estadoPago'], ['pendiente', 'parcial'], true)){
+            echo "<button type='button' class='marcar-detalle-pagado' data-id='{$row['detalleID']}' data-saldo='{$row['saldoPendiente']}' style='border:0;border-radius:6px;background:#FF1493;color:#fff;padding:6px 8px;cursor:pointer;'>Registrar pago</button>";
         } else {
             echo htmlspecialchars($row['fechaPago'] ?? '');
         }
@@ -132,15 +138,15 @@ try {
     }
 
     echo "<tr style='font-weight:bold; background:#f2f2f2;'>
-            <td colspan='6' style='text-align:right; padding:8px;'>Total:</td>
+            <td colspan='8' style='text-align:right; padding:8px;'>Total:</td>
             <td style='padding:8px;'>S/ " . number_format($totalCalculado, 2) . "</td>
           </tr>";
     echo "<tr style='background:#f9f9f9;'>
-            <td colspan='6' style='text-align:right; padding:8px;'>Pago:</td>
+            <td colspan='8' style='text-align:right; padding:8px;'>Pago:</td>
             <td style='padding:8px;'>S/ " . number_format($venta['pago'], 2) . "</td>
           </tr>";
     echo "<tr style='background:#f9f9f9;'>
-            <td colspan='6' style='text-align:right; padding:8px;'>Vuelto:</td>
+            <td colspan='8' style='text-align:right; padding:8px;'>Vuelto:</td>
             <td style='padding:8px;'>S/ " . number_format($venta['vuelto'], 2) . "</td>
           </tr>";
     echo "</table>";
