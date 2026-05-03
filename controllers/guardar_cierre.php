@@ -1,110 +1,173 @@
 <?php
+ob_start();
 session_start();
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
+
+ini_set('display_errors', '0');
 error_reporting(E_ALL);
 header('Content-Type: application/json');
 
-function errorJSON($msg){
-    echo json_encode(['ok'=>false,'error'=>$msg]);
+require_once __DIR__ . '/../config/conexion.php';
+require_once __DIR__ . '/../config/schema_helpers.php';
+
+function responder($payload) {
+    if(ob_get_length() !== false){
+        ob_clean();
+    }
+
+    echo json_encode($payload);
     exit;
 }
 
-require_once __DIR__ . '/../config/conexion.php';
+date_default_timezone_set('America/Lima');
+$hoy = date('Y-m-d');
 $usuarioID = $_SESSION['usuarioID'] ?? 1;
+$data = json_decode(file_get_contents('php://input'), true);
+$fisicos = [];
+
+if(($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'){
+    responder([
+        'ok' => false,
+        'error' => 'Metodo no permitido.'
+    ]);
+}
+
+if(!is_array($data) || empty($data['cierres']) || !is_array($data['cierres'])){
+    responder([
+        'ok' => false,
+        'error' => 'No llegaron datos de cierre.'
+    ]);
+}
+
+foreach($data['cierres'] as $cierre){
+    $tipo = strtolower(trim($cierre['tipopago'] ?? ''));
+    if($tipo !== ''){
+        $fisicos[$tipo] = floatval($cierre['fisico'] ?? 0);
+    }
+}
 
 try {
-    // 1️⃣ Verificar si ya existe un cierre activo hoy
-    $check = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE DATE(fecha) = CURDATE() AND estado = 1");
-    $check->execute();
-    if($check->fetchColumn() > 0) errorJSON('Ya se realizó un cierre activo hoy.');
+    asegurarColumnasPagos($conn);
 
-    // 2️⃣ Obtener los datos de la tabla ventas si no vienen por POST
-    $data = json_decode(file_get_contents('php://input'), true);
+    $check = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = ? AND estado = 1");
+    $check->execute([$hoy]);
 
-    if(!isset($data['cierres']) || empty($data['cierres'])){
-        // Traer los totales desde la tabla ventas
-        $stmt = $conn->prepare("
-            SELECT tipoPago AS tipopago,
-                   COALESCE(SUM(total),0) AS total_ventas,
-                   COALESCE(SUM(CASE WHEN estadoPago='pagado' THEN total ELSE 0 END),0) AS total_pagado,
-                   COALESCE(SUM(CASE WHEN estadoPago!='pagado' THEN total ELSE 0 END),0) AS total_pendiente,
-                   COALESCE(SUM(pago),0) AS total_recibido
-            FROM ventas
-            WHERE DATE(fecha) = CURDATE() AND estado = 1
-            GROUP BY tipoPago
-        ");
-        $stmt->execute();
-        $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if(empty($ventas)) errorJSON('No hay ventas activas hoy para cerrar.');
-
-        // Calcular vuelto dinámicamente
-        $cierres = [];
-        foreach($ventas as $v){
-            $vuelto = max(0, $v['total_recibido'] - $v['total_ventas']); // pago - total
-            $cierres[] = [
-                'tipopago'       => $v['tipopago'],
-                'total_ventas'   => $v['total_ventas'],
-                'total_pagado'   => $v['total_pagado'],
-                'total_pendiente'=> $v['total_pendiente'],
-                'total_recibido' => $v['total_recibido'],
-                'total_vuelto'   => $vuelto,
-                'fisico'         => $v['total_recibido'] // por defecto igual al recibido
-            ];
-        }
-
-    } else {
-        $cierres = $data['cierres'];
+    if($check->fetchColumn() > 0){
+        responder([
+            'ok' => false,
+            'error' => 'Ya existe un cierre activo para hoy.'
+        ]);
     }
 
-    // 3️⃣ Insertar cierres en la tabla cierres
+    $stmt = $conn->prepare("
+        SELECT
+            vt.tipopago,
+            vt.total_ventas,
+            vt.total_pagado,
+            vt.total_pendiente,
+            vt.total_pendientes_cobrados,
+            vt.total_recibido,
+            vt.total_vuelto,
+            COALESCE(gt.total_compra, 0) AS total_compra,
+            COALESCE(gt.total_ganancia, 0) AS total_ganancia
+        FROM (
+            SELECT
+                tipoPago AS tipopago,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_ventas,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_pagado,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pendiente' AND DATE(fecha) = ? THEN total ELSE 0 END), 0) AS total_pendiente,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? AND DATE(fecha) < ? THEN total ELSE 0 END), 0) AS total_pendientes_cobrados,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_recibido,
+                COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN vuelto ELSE 0 END), 0) AS total_vuelto
+            FROM ventas
+            WHERE estado = 1
+              AND (
+                  (estadoPago = 'pagado' AND DATE(fechaPago) = ?)
+                  OR (estadoPago = 'pendiente' AND DATE(fecha) = ?)
+              )
+            GROUP BY tipoPago
+        ) vt
+        LEFT JOIN (
+            SELECT
+                v.tipoPago AS tipopago,
+                COALESCE(SUM(d.cantidad * p.precioCompra), 0) AS total_compra,
+                COALESCE(SUM((d.precioUnitario - p.precioCompra) * d.cantidad), 0) AS total_ganancia
+            FROM ventas v
+            INNER JOIN detalleventa d ON d.ventaID = v.ventaID
+            INNER JOIN productos p ON p.productoID = d.productoID
+            WHERE DATE(v.fechaPago) = ?
+              AND v.estadoPago = 'pagado'
+              AND v.estado = 1
+            GROUP BY v.tipoPago
+        ) gt ON gt.tipopago = vt.tipopago
+        ORDER BY vt.tipopago
+    ");
+    $stmt->execute([$hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy]);
+    $resumenes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if(empty($resumenes)){
+        responder([
+            'ok' => false,
+            'error' => 'No hay ventas activas hoy para cerrar.'
+        ]);
+    }
+
     $conn->beginTransaction();
+
     $insert = $conn->prepare("
         INSERT INTO cierres
-        (fecha, tipopago, total_ventas, total_pagado, total_pendiente, total_recibido, total_vuelto, fisico, diferencia, observacion, usuarioID, estado)
+        (fecha, tipopago, total_ventas, total_pagado, total_pendiente, total_pendientes_cobrados, total_recibido,
+         total_vuelto, total_compra, total_ganancia, fisico, observacion, usuarioID, estado)
         VALUES
-        (NOW(), :tipopago, :total_ventas, :total_pagado, :total_pendiente, :total_recibido, :total_vuelto, :fisico, :diferencia, :observacion, :usuarioID, :estado)
+        (:fecha, :tipopago, :total_ventas, :total_pagado, :total_pendiente, :total_pendientes_cobrados, :total_recibido,
+         :total_vuelto, :total_compra, :total_ganancia, :fisico, :observacion, :usuarioID, 1)
     ");
 
-    foreach($cierres as $c){
-        $tipopago        = $c['tipopago'] ?? null;
-        $total_ventas    = floatval($c['total_ventas'] ?? 0);
-        $total_pagado    = floatval($c['total_pagado'] ?? 0);
-        $total_pendiente = floatval($c['total_pendiente'] ?? 0);
-        $total_recibido  = floatval($c['total_recibido'] ?? 0);
-        $total_vuelto    = floatval($c['total_vuelto'] ?? 0);
+    foreach($resumenes as $resumen){
+        $tipopago = strtolower(trim($resumen['tipopago']));
+        $totalRecibido = floatval($resumen['total_recibido']);
+        $fisico = array_key_exists($tipopago, $fisicos) ? $fisicos[$tipopago] : $totalRecibido;
+        $diferencia = $fisico - $totalRecibido;
 
-        if(empty($tipopago)) throw new Exception('Tipo de pago no definido.');
+        if(abs($diferencia) < 0.01){
+            $observacion = 'Correcto';
+        } elseif($diferencia < 0){
+            $observacion = 'Faltante de S/ ' . number_format(abs($diferencia), 2, '.', '');
+        } else {
+            $observacion = 'Sobrante de S/ ' . number_format($diferencia, 2, '.', '');
+        }
 
-        // 🔹 Tomar valor de Físico si viene del POST, si no igual a total_recibido
-        $fisico = floatval($c['fisico'] ?? $total_recibido);
-
-        // 🔹 Diferencia y observación
-        $diferencia  = $fisico - $total_recibido;
-        $observacion = ($diferencia != 0) ? "Diferencia de S/ ".number_format($diferencia,2) : 'Correcto';
-
-        // 🔹 Insertar en la base
         $insert->execute([
-            ':tipopago'        => $tipopago,
-            ':total_ventas'    => $total_ventas,
-            ':total_pagado'    => $total_pagado,
-            ':total_pendiente' => $total_pendiente,
-            ':total_recibido'  => $total_recibido,
-            ':total_vuelto'    => $total_vuelto,
-            ':fisico'          => $fisico,
-            ':diferencia'      => $diferencia,
-            ':observacion'     => $observacion,
-            ':usuarioID'       => $usuarioID,
-            ':estado'          => 1
+            ':fecha' => $hoy,
+            ':tipopago' => $tipopago,
+            ':total_ventas' => floatval($resumen['total_ventas']),
+            ':total_pagado' => floatval($resumen['total_pagado']),
+            ':total_pendiente' => floatval($resumen['total_pendiente']),
+            ':total_pendientes_cobrados' => floatval($resumen['total_pendientes_cobrados']),
+            ':total_recibido' => $totalRecibido,
+            ':total_vuelto' => floatval($resumen['total_vuelto']),
+            ':total_compra' => floatval($resumen['total_compra']),
+            ':total_ganancia' => floatval($resumen['total_ganancia']),
+            ':fisico' => $fisico,
+            ':observacion' => $observacion,
+            ':usuarioID' => $usuarioID
         ]);
     }
 
     $conn->commit();
-    echo json_encode(['ok'=>true,'message'=>'Cierre guardado correctamente.']);
 
-} catch(Exception $e){
-    if($conn->inTransaction()) $conn->rollBack();
-    errorJSON('Error: '.$e->getMessage());
+    responder([
+        'ok' => true,
+        'message' => 'Cierre guardado correctamente. Desde ahora no se permiten ventas para hoy.'
+    ]);
+
+} catch(Throwable $e){
+    if(isset($conn) && $conn->inTransaction()){
+        $conn->rollBack();
+    }
+
+    responder([
+        'ok' => false,
+        'error' => $e->getMessage()
+    ]);
 }
 ?>
