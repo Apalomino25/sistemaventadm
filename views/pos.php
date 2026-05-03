@@ -1,6 +1,4 @@
-     
-    
-    <?php
+<?php
     session_start();
 
     if(!isset($_SESSION['usuario'])){
@@ -8,17 +6,30 @@
         exit;
     }
 
-    $conexion = new mysqli("localhost","root","","sistemaventasdm");
-    $clienteDefault = $conexion->query("SELECT * FROM clientes WHERE clienteID = 1 LIMIT 1");
-    $cliente = $clienteDefault->fetch_assoc();
-    ?>
+    require_once __DIR__ . "/../config/conexion.php";
+    require_once __DIR__ . "/../config/schema_helpers.php";
+
+    try {
+    $conexion = $conn;
+
+    $cliente = obtenerClienteGeneral($conexion);
+
+    $stmtCierre = $conexion->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = CURDATE() AND estado = 1");
+    $stmtCierre->execute();
+    $cierreRealizado = $stmtCierre->fetchColumn() > 0;
+
+    } catch (PDOException $e) {
+    die("Error de conexión: " . $e->getMessage());
+    }
+
+   ?>
 
     <!DOCTYPE html>
     <html lang="es">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="../assets/css/pos.css">
+        <link rel="stylesheet" href="../assets/css/pos.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/pos.css'); ?>">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
         <title>POS</title>
     </head>
@@ -32,9 +43,29 @@
 
             <div class="datosVentaItem">
                 <label>Cliente</label>
-                <input type="text" id="clienteNombre" value="<?php echo $cliente['nombre'];?>" readonly>
-                <input type="hidden" id="clienteID" value="<?php echo $cliente['clienteID']; ?>">
+                <div class="cliente-campo">
+                    <input type="text" id="clienteNombre" value="<?php echo htmlspecialchars($cliente['nombre']);?>" autocomplete="off">
+                    <input type="hidden" id="clienteID" value="<?php echo intval($cliente['clienteID']); ?>">
+                    <button type="button" id="btnClienteGeneral" title="Usar cliente general">General</button>
+                    <button type="button" id="btnNuevoCliente" title="Agregar cliente">+</button>
+                    <div id="resultadosClientes" class="resultados-clientes"></div>
+                </div>
             </div>
+
+            <form id="formNuevoCliente" class="form-nuevo-cliente oculto">
+                <input type="text" name="nombre" placeholder="Nombre cliente" required>
+                <select name="tipoDocumento">
+                    <option value="DNI">DNI</option>
+                    <option value="RUC">RUC</option>
+                    <option value="CE">CE</option>
+                    <option value="OTRO">OTRO</option>
+                </select>
+                <input type="text" name="numeroDocumento" placeholder="Documento">
+                <input type="text" name="telefono" placeholder="Telefono">
+                <input type="text" name="direccion" placeholder="Direccion">
+                <button type="submit">Guardar cliente</button>
+                <button type="button" id="btnCancelarCliente">Cancelar</button>
+            </form>
 
             <div class="datosVentaItem">
                 <label>Fecha</label>
@@ -52,9 +83,16 @@
 
         <!-- BUSQUEDA -->
 
+        <?php if($cierreRealizado): ?>
+            <div class="cierre-aviso-pos">El cierre del dia ya fue realizado. No se pueden registrar mas ventas hoy.</div>
+        <?php endif; ?>
+
         <div class="busqueda">
             <label>Buscar Producto:</label>
-            <input type="text" placeholder="Escanear producto..." id="codigo" class="input-buscar">
+            <div class="busqueda-campo">
+                <input type="text" placeholder="Escanear o buscar producto..." id="codigo" class="input-buscar" autocomplete="off" <?= $cierreRealizado ? 'disabled' : '' ?>>
+                <div id="resultadosBusqueda" class="resultados-busqueda"></div>
+            </div>
         </div>
 
         <!-- FIN BUSQUEDA -->
@@ -71,10 +109,12 @@
                     <th>Cantidad</th>
                     <th>Precio Venta</th>
                     <th>Subtotal</th>
+                    <th>Acciones</th>
                 </tr>
             </thead>
 
             <tbody id="tabla-ventas">
+                
             </tbody>
         </table>
 
@@ -121,7 +161,7 @@
 
             <div class="cont-btn">
                 <i class="fas fa-coins cont-btn-icons" id="btnHistoricoVentas" data-title="Hist. de Ventas"></i>
-                <i class="fas fa-save cont-btn-icons" id="btnGrabar" data-title="Grabar"></i>
+                <i class="fas fa-save cont-btn-icons <?= $cierreRealizado ? 'deshabilitado' : '' ?>" id="btnGrabar" data-title="Grabar"></i>
                 
                 <!-- <button type="button" class="cont-btn-item " id="btnGrabar">GRABAR</button> -->
             </div>
@@ -136,7 +176,7 @@
 
     <div id="contenedorHistorial"></div>
      
-    <script src="../assets/js/pos.js"></script>
+    <script src="../assets/js/pos.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/pos.js'); ?>"></script>
     <script src="../assets/js/historial.js"></script>
     
 
