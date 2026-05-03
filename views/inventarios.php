@@ -7,7 +7,8 @@ require_once __DIR__ . "/../config/auth_helpers.php";
 requerirAdministradorHtml();
 asegurarColumnasInventario($conn);
 
-$diasAlertaVencimiento = 30;
+// Alertas de vencimiento: 2 semanas (14 días) de anticipación
+$diasAlertaVencimiento = 14;
 
 $categorias = $conn->query("
     SELECT categoriaID, nombre
@@ -65,19 +66,22 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
         $dias = (int)$hoy->diff($vence)->format('%r%a');
     }
 
+    // Vencido
     if($fecha && $dias < 0){
-        return ['clase' => 'vencido', 'texto' => 'Vencido'];
+        return ['clase' => 'vencido', 'texto' => '⚠️ VENCIDO'];
     }
 
-    if($fecha && $dias <= $diasAlerta){
-        return ['clase' => 'vence-pronto', 'texto' => 'Vence en ' . $dias . ' dias'];
+    // Vence próximamente (dentro de 2 semanas)
+    if($fecha && $dias >= 0 && $dias <= $diasAlerta){
+        return ['clase' => 'vence-pronto', 'texto' => "⏰ Vence en {$dias} días"];
     }
 
+    // Stock bajo (menos de 5 unidades)
     if($stock < 5){
-        return ['clase' => 'stock-bajo', 'texto' => 'Stock bajo'];
+        return ['clase' => 'stock-bajo', 'texto' => '📦 Stock bajo (' . $stock . ')'];
     }
 
-    return ['clase' => 'ok', 'texto' => 'OK'];
+    return ['clase' => 'ok', 'texto' => '✓ OK'];
 }
 ?>
 
