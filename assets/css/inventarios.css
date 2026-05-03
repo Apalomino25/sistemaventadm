@@ -21,6 +21,81 @@
     color:#555;
 }
 
+.oculto{
+    display:none !important;
+}
+
+.inventario-buscador{
+    margin:0 0 12px;
+    padding:14px;
+    border:1px solid #d7dce2;
+    border-radius:10px;
+    background:#fbfbfd;
+}
+
+.inventario-buscador label{
+    display:block;
+    margin-bottom:8px;
+    font-size:13px;
+    font-weight:700;
+}
+
+.inventario-buscador-linea{
+    display:grid;
+    grid-template-columns:minmax(220px, 1fr) auto;
+    gap:8px;
+}
+
+.inventario-buscador input{
+    min-height:40px;
+    border:1px solid #cfd5dc;
+    border-radius:8px;
+    padding:8px 10px;
+    outline:none;
+}
+
+.inventario-buscador input:focus{
+    border-color:#FF1493;
+    box-shadow:0 0 0 3px rgba(255,20,147,.12);
+}
+
+.inventario-buscador button{
+    min-height:40px;
+    border:0;
+    border-radius:8px;
+    padding:8px 16px;
+    background:#1f2937;
+    color:#fff;
+    cursor:pointer;
+    font-weight:700;
+}
+
+.inventario-buscador button:hover{
+    background:#FF1493;
+}
+
+.mensaje-inventario{
+    margin:0 0 12px;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:700;
+    border:1px solid #cfd5dc;
+    background:#f8fafc;
+    color:#374151;
+}
+
+.mensaje-inventario.existente{
+    border-color:#FF1493;
+    background:#fff0f7;
+    color:#b00063;
+}
+
+.mensaje-inventario.nuevo{
+    border-color:#cfd5dc;
+    background:#f8fafc;
+}
+
 .inventario-form{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
@@ -81,6 +156,46 @@
 
 .acciones-form .secundario{
     background:#777;
+}
+
+.inventario-form-resultado{
+    grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.producto-encontrado{
+    grid-column:1 / -1;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #FF1493;
+    background:#fff0f7;
+    color:#374151;
+}
+
+.producto-encontrado strong{
+    color:#b00063;
+    font-size:16px;
+}
+
+.producto-encontrado span{
+    color:#4b5563;
+    font-size:13px;
+}
+
+.btn-editar-stock{
+    border:0;
+    border-radius:6px;
+    padding:7px 10px;
+    background:#1f2937;
+    color:#fff;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.btn-editar-stock:hover{
+    background:#FF1493;
 }
 
 .tabla-ventas td span{
