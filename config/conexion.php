@@ -3,7 +3,7 @@
     $host = "localhost";
     $dbname = "sistemaventasdm";   // nombre de tu base de datos
     $user = "root";           // usuario de MySQL
-    $password = "";           // contraseña (en XAMPP normalmente está vacía)
+    $password = "S0p0rt31994$";           // contraseña (en XAMPP normalmente está vacía)
 
     try {
         $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
