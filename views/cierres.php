@@ -61,13 +61,13 @@ try {
                     'pendiente' AS tipopago,
                     0 AS total_ventas,
                     0 AS total_pagado,
-                    COALESCE(SUM(d.subtotal), 0) AS total_pendiente,
+                    COALESCE(SUM(d.saldoPendiente), 0) AS total_pendiente,
                     0 AS total_pendientes_cobrados,
                     0 AS total_recibido,
                     0 AS total_vuelto
                 FROM detalleventa d
                 INNER JOIN ventas v ON v.ventaID = d.ventaID
-                WHERE d.estadoPago = 'pendiente'
+                WHERE d.estadoPago IN ('pendiente', 'parcial')
                   AND DATE(v.fecha) = ?
                   AND v.estado = 1
                 HAVING total_pendiente > 0
@@ -75,8 +75,8 @@ try {
             LEFT JOIN (
                 SELECT
                     v.tipoPago AS tipopago,
-                    COALESCE(SUM(d.cantidad * p.precioCompra), 0) AS total_compra,
-                    COALESCE(SUM((d.precioUnitario - p.precioCompra) * d.cantidad), 0) AS total_ganancia
+                    COALESCE(SUM(CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * (d.cantidad * p.precioCompra) ELSE 0 END), 0) AS total_compra,
+                    COALESCE(SUM(CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * ((d.precioUnitario - p.precioCompra) * d.cantidad) ELSE 0 END), 0) AS total_ganancia
                 FROM ventas v
                 INNER JOIN detalleventa d ON d.ventaID = v.ventaID
                 INNER JOIN productos p ON p.productoID = d.productoID
@@ -94,9 +94,9 @@ try {
 
     $stmtGanancia = $conn->prepare("
         SELECT p.nombre, d.cantidad, p.precioCompra, d.precioUnitario AS precioVenta,
-               d.subtotal AS totalVenta,
-               (p.precioCompra * d.cantidad) AS totalCompra,
-               (d.precioUnitario - p.precioCompra) * d.cantidad AS ganancia
+               d.montoPagado AS totalVenta,
+               CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * (p.precioCompra * d.cantidad) ELSE 0 END AS totalCompra,
+               CASE WHEN d.subtotal > 0 THEN (d.montoPagado / d.subtotal) * ((d.precioUnitario - p.precioCompra) * d.cantidad) ELSE 0 END AS ganancia
         FROM detalleventa d
         INNER JOIN productos p ON d.productoID = p.productoID
         INNER JOIN ventas v ON d.ventaID = v.ventaID
