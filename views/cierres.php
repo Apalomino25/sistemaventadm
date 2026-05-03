@@ -41,20 +41,36 @@ try {
                 'Correcto' AS observacion
             FROM (
                 SELECT
-                    tipoPago AS tipopago,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_ventas,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_pagado,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pendiente' AND DATE(fecha) = ? THEN total ELSE 0 END), 0) AS total_pendiente,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? AND DATE(fecha) < ? THEN total ELSE 0 END), 0) AS total_pendientes_cobrados,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN total ELSE 0 END), 0) AS total_recibido,
-                    COALESCE(SUM(CASE WHEN estadoPago = 'pagado' AND DATE(fechaPago) = ? THEN vuelto ELSE 0 END), 0) AS total_vuelto
-                FROM ventas
-                WHERE estado = 1
-                  AND (
-                      (estadoPago = 'pagado' AND DATE(fechaPago) = ?)
-                      OR (estadoPago = 'pendiente' AND DATE(fecha) = ?)
-                  )
-                GROUP BY tipoPago
+                    vp.tipoPago AS tipopago,
+                    COALESCE(SUM(vp.monto), 0) AS total_ventas,
+                    COALESCE(SUM(vp.monto), 0) AS total_pagado,
+                    0 AS total_pendiente,
+                    COALESCE(SUM(CASE WHEN DATE(v.fecha) < ? THEN vp.monto ELSE 0 END), 0) AS total_pendientes_cobrados,
+                    COALESCE(SUM(vp.monto), 0) AS total_recibido,
+                    0 AS total_vuelto
+                FROM venta_pagos vp
+                INNER JOIN ventas v ON v.ventaID = vp.ventaID
+                WHERE DATE(vp.fechaPago) = ?
+                  AND vp.estado = 1
+                  AND v.estado = 1
+                GROUP BY vp.tipoPago
+
+                UNION ALL
+
+                SELECT
+                    'pendiente' AS tipopago,
+                    0 AS total_ventas,
+                    0 AS total_pagado,
+                    COALESCE(SUM(d.subtotal), 0) AS total_pendiente,
+                    0 AS total_pendientes_cobrados,
+                    0 AS total_recibido,
+                    0 AS total_vuelto
+                FROM detalleventa d
+                INNER JOIN ventas v ON v.ventaID = d.ventaID
+                WHERE d.estadoPago = 'pendiente'
+                  AND DATE(v.fecha) = ?
+                  AND v.estado = 1
+                HAVING total_pendiente > 0
             ) vt
             LEFT JOIN (
                 SELECT
@@ -71,7 +87,7 @@ try {
             ) gt ON gt.tipopago = vt.tipopago
             ORDER BY vt.tipopago
         ");
-        $stmt->execute([$hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy, $hoy]);
+        $stmt->execute([$hoy, $hoy, $hoy, $hoy]);
     }
 
     $cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -84,8 +100,8 @@ try {
         FROM detalleventa d
         INNER JOIN productos p ON d.productoID = p.productoID
         INNER JOIN ventas v ON d.ventaID = v.ventaID
-        WHERE DATE(v.fechaPago) = ?
-          AND v.estadoPago = 'pagado'
+        WHERE DATE(d.fechaPago) = ?
+          AND d.estadoPago = 'pagado'
           AND v.estado = 1
         ORDER BY p.nombre
     ");
