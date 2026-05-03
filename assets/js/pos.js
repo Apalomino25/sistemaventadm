@@ -113,7 +113,13 @@ window.iniciarPOS = function() {
     if(estadoPagoSelect){
         estadoPagoSelect.addEventListener("change", () => {
             document.querySelectorAll(".estado-detalle-pago").forEach(select => {
-                select.value = estadoPagoSelect.value;
+                const fila = select.closest("tr");
+                const subtotal = parseFloat(fila?.querySelector(".subtotal")?.textContent) || 0;
+                const input = fila?.querySelector(".monto-detalle-pagado");
+                if(input){
+                    input.value = estadoPagoSelect.value === "pagado" ? subtotal.toFixed(2) : "0.00";
+                    actualizarEstadoPagoFila(fila);
+                }
             });
             actualizarCamposPago();
             actualizarPagoMixto();
@@ -405,6 +411,7 @@ function recalcularSubtotalFila(fila){
     const cantidad = parseInt(fila.querySelector(".cantidad").textContent) || 0;
     const precio = parseFloat(fila.querySelector(".precio").textContent) || 0;
     fila.querySelector(".subtotal").textContent = (cantidad * precio).toFixed(2);
+    actualizarEstadoPagoFila(fila);
     actualizarPagoMixto();
 }
 
@@ -457,12 +464,9 @@ function agregarProductoTabla(prod){
         <td class="cantidad">${cantidad}</td>
         <td class="precio ${precioEditable ? "precio-editable" : ""}" data-precio-editable="${precioEditable ? "1" : "0"}" title="${precioEditable ? "Click para editar precio" : ""}">${formatearMonto(precio)}</td>
         <td class="subtotal">${subtotal.toFixed(2)}</td>
-        <td>
-            <select class="estado-detalle-pago">
-                <option value="pagado" selected>Pagado</option>
-                <option value="pendiente">Pendiente</option>
-            </select>
-        </td>
+        <td><input type="number" step="0.01" min="0" class="monto-detalle-pagado" value="${subtotal.toFixed(2)}"></td>
+        <td class="saldo-detalle">0.00</td>
+        <td class="estado-detalle-pago">Pagado</td>
         <td class="acciones">
             <i class="fa-solid fa-pen editar"></i>
             ${precioEditable ? '<i class="fa-solid fa-dollar-sign editar-precio" title="Editar precio"></i>' : ''}
@@ -472,8 +476,14 @@ function agregarProductoTabla(prod){
 
     tabla.appendChild(fila);
 
-    fila.querySelector(".estado-detalle-pago").addEventListener("change", () => {
+    fila.querySelector(".monto-detalle-pagado").addEventListener("input", () => {
+        actualizarEstadoPagoFila(fila);
         sincronizarEstadoVentaPorDetalles();
+        actualizarPagoMixto();
+    });
+    fila.querySelector(".monto-detalle-pagado").addEventListener("blur", e => {
+        e.target.value = formatearMonto(e.target.value);
+        actualizarEstadoPagoFila(fila);
         actualizarPagoMixto();
     });
 
@@ -526,12 +536,35 @@ function calcularTotal(){
 function obtenerTotalPagadoDetalle(){
     let total = 0;
     document.querySelectorAll("#tabla-ventas tr").forEach(fila => {
-        const estado = fila.querySelector(".estado-detalle-pago")?.value || "pagado";
-        if(estado === "pagado"){
-            total += parseFloat(fila.querySelector(".subtotal")?.textContent) || 0;
-        }
+        total += parseFloat(fila.querySelector(".monto-detalle-pagado")?.value) || 0;
     });
     return total;
+}
+
+function actualizarEstadoPagoFila(fila){
+    const subtotal = parseFloat(fila.querySelector(".subtotal")?.textContent) || 0;
+    const inputPagado = fila.querySelector(".monto-detalle-pagado");
+    const saldoCelda = fila.querySelector(".saldo-detalle");
+    const estadoCelda = fila.querySelector(".estado-detalle-pago");
+    let montoPagado = parseFloat(inputPagado?.value) || 0;
+
+    if(montoPagado < 0) montoPagado = 0;
+    if(montoPagado > subtotal) montoPagado = subtotal;
+
+    if(inputPagado && String(inputPagado.value) !== String(montoPagado)){
+        inputPagado.value = montoPagado.toFixed(2);
+    }
+
+    const saldo = Math.max(subtotal - montoPagado, 0);
+    let estado = "pendiente";
+    if(montoPagado >= subtotal - 0.01){
+        estado = "pagado";
+    } else if(montoPagado > 0){
+        estado = "parcial";
+    }
+
+    if(saldoCelda) saldoCelda.textContent = saldo.toFixed(2);
+    if(estadoCelda) estadoCelda.textContent = estado.charAt(0).toUpperCase() + estado.slice(1);
 }
 
 function obtenerPagosMixtos(){
@@ -567,10 +600,10 @@ function actualizarPagoMixto(){
 }
 
 function sincronizarEstadoVentaPorDetalles(){
-    const estados = Array.from(document.querySelectorAll(".estado-detalle-pago")).map(s => s.value);
+    const estados = Array.from(document.querySelectorAll(".estado-detalle-pago")).map(s => s.textContent.trim().toLowerCase());
     const estadoPagoSelect = document.getElementById("estadoPago");
     if(!estadoPagoSelect || estados.length === 0) return;
-    estadoPagoSelect.value = estados.some(estado => estado === "pendiente") ? "pendiente" : "pagado";
+    estadoPagoSelect.value = estados.some(estado => estado === "pendiente" || estado === "parcial") ? "pendiente" : "pagado";
 }
 
 function actualizarCamposPago(){
@@ -683,7 +716,9 @@ function guardarVenta(){
             cantidad: parseInt(fila.children[4].textContent),
             precio: parseFloat(fila.children[5].textContent),
             subtotal: parseFloat(fila.children[6].textContent),
-            estadoPago: fila.querySelector(".estado-detalle-pago")?.value || "pagado"
+            montoPagado: parseFloat(fila.querySelector(".monto-detalle-pagado")?.value) || 0,
+            saldoPendiente: parseFloat(fila.querySelector(".saldo-detalle")?.textContent) || 0,
+            estadoPago: fila.querySelector(".estado-detalle-pago")?.textContent.trim().toLowerCase() || "pagado"
         });
     });
 
@@ -885,6 +920,15 @@ if (e.target.classList.contains("ver")) {
 
     if(e.target.classList.contains("marcar-detalle-pagado")){
         const detalleID = e.target.dataset.id;
+        const saldo = parseFloat(e.target.dataset.saldo) || 0;
+        const montoTexto = prompt("Monto que cancela ahora:", saldo.toFixed(2));
+        if(montoTexto === null) return;
+        const monto = parseFloat(montoTexto.replace(",", "."));
+        if(isNaN(monto) || monto <= 0 || monto > saldo + 0.01){
+            alert("Monto invalido");
+            return;
+        }
+
         const tipoPago = prompt("Tipo de pago para este producto: efectivo, yape, plin o transferencia", "efectivo");
         if(tipoPago === null) return;
 
@@ -897,7 +941,7 @@ if (e.target.classList.contains("ver")) {
         fetch("../controllers/actualizar_detalle_pago.php", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({detalleID, tipoPago: tipo})
+            body: JSON.stringify({detalleID, tipoPago: tipo, monto})
         })
         .then(res => res.json())
         .then(data => {
