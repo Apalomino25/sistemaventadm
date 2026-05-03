@@ -30,18 +30,18 @@ if(empty($_SESSION['usuarioID'])){
     responderJson(["ok" => false, "error" => "Sesion expirada. Vuelve a iniciar sesion."]);
 }
 
-$token = $data["token"] ?? null;
-if(!$token){
-    responderJson(["ok" => false, "error" => "Token no enviado"]);
-}
-
 $pago = floatval($data["pago"] ?? 0);
 $vuelto = floatval($data["vuelto"] ?? 0);
+$pagoCliente = $pago;
+$vueltoCliente = $vuelto;
 $productos = $data["productos"] ?? [];
 $pagos = $data["pagos"] ?? [];
 $tipoPago = $data['tipoPago'] ?? 'efectivo';
 $clienteID = intval($data['clienteID'] ?? 0);
 $usuarioID = $_SESSION['usuarioID'];
+
+// Generar token único en el servidor
+$token = bin2hex(random_bytes(16)) . '_' . time() . '_' . $usuarioID;
 
 date_default_timezone_set('America/Lima');
 $hoy = date('Y-m-d');
@@ -169,6 +169,8 @@ try {
         $totalPagos += $montoPagoItem;
     }
 
+    $pagosParaCierre = [];
+
     if(!empty($pagosValidados)){
         if(abs($totalPagos - $totalDetallePagado) > 0.01){
             throw new Exception("Los pagos deben sumar el total abonado en productos");
@@ -176,9 +178,30 @@ try {
         $pago = $totalPagos;
         $vuelto = 0;
         $tipoPago = count($pagosValidados) > 1 ? 'mixto' : $pagosValidados[0]['tipoPago'];
+        $pagosParaCierre = $pagosValidados;
     } elseif($totalDetallePagado > 0){
-        $pago = $totalDetallePagado;
-        $vuelto = 0;
+        $tipoPago = strtolower(trim($tipoPago));
+        if(!in_array($tipoPago, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
+            $tipoPago = 'efectivo';
+        }
+
+        if($tipoPago === 'efectivo'){
+            $montoRecibido = round(max($pagoCliente - $vueltoCliente, 0), 2);
+            if($montoRecibido <= 0 || $montoRecibido > $totalDetallePagado + 0.01){
+                $montoRecibido = $totalDetallePagado;
+            }
+            $pago = $pagoCliente > 0 ? $pagoCliente : $totalDetallePagado;
+            $vuelto = max($vueltoCliente, 0);
+        } else {
+            $montoRecibido = $totalDetallePagado;
+            $pago = $totalDetallePagado;
+            $vuelto = 0;
+        }
+
+        $pagosParaCierre[] = [
+            'tipoPago' => $tipoPago,
+            'monto' => $montoRecibido
+        ];
     } else {
         $pago = 0;
         $vuelto = 0;
@@ -239,12 +262,12 @@ try {
         ]);
     }
 
-    if(!empty($pagosValidados)){
+    if(!empty($pagosParaCierre)){
         $stmtPago = $conn->prepare("
             INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
             VALUES (?, ?, ?, ?, 1)
         ");
-        foreach($pagosValidados as $pagoItem){
+        foreach($pagosParaCierre as $pagoItem){
             $stmtPago->execute([
                 $ventaID,
                 $pagoItem['tipoPago'],
@@ -252,12 +275,6 @@ try {
                 $fechaPago
             ]);
         }
-    } elseif($pago > 0){
-        $stmtPago = $conn->prepare("
-            INSERT INTO venta_pagos (ventaID, tipoPago, monto, fechaPago, estado)
-            VALUES (?, ?, ?, ?, 1)
-        ");
-        $stmtPago->execute([$ventaID, $tipoPago, $pago, $fechaPago]);
     }
 
     $conn->commit();
