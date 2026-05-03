@@ -755,9 +755,8 @@ function guardarVenta(){
         return;
     }
 
-    // 🟢 (Opcional PRO) Token único
-    const token = Date.now() + "-" + Math.random();
-
+    // 🟢 Token se genera en el servidor (más seguro)
+    
     console.log("DATA QUE SE ENVÍA:", {
     total,
     pago,
@@ -766,8 +765,7 @@ function guardarVenta(){
     estadoPago,
     clienteID,
     pagos,
-    productos,
-    token
+    productos
 });
 
     fetch("../controllers/guardar_venta.php",{
@@ -781,8 +779,7 @@ function guardarVenta(){
             estadoPago,
             clienteID,
             pagos,
-            productos,
-            token // importante si lo usas en backend
+            productos
         })
     })
     .then(res => res.text())
@@ -1352,13 +1349,22 @@ document.addEventListener("change", function(e) {
     const select = e.target;
     const ventaID = select.dataset.id;
     const estadoPago = select.value;
+    const estadoAnterior = select.dataset.estadoActual || "pendiente";
 
     if(estadoPago !== "pagado"){
         return;
     }
 
-    if(!confirm("Marcar esta boleta pendiente como pagada hoy? Entrara en el cierre de hoy.")){
-        select.value = "pendiente";
+    if(!confirm("Marcar esta boleta como pagada hoy? Entrara en el cierre de hoy.")){
+        select.value = estadoAnterior;
+        return;
+    }
+
+    const fila = select.closest("tr");
+    const tipoPago = (fila?.querySelector(".tipo-pago-saldo")?.value || "").trim().toLowerCase();
+    if(!["efectivo", "yape", "plin", "transferencia"].includes(tipoPago)){
+        alert("Selecciona el tipo de pago del saldo");
+        select.value = estadoAnterior;
         return;
     }
 
@@ -1367,7 +1373,7 @@ document.addEventListener("change", function(e) {
     fetch("../controllers/actualizar_estado_pago.php", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ventaID, estadoPago})
+        body: JSON.stringify({ventaID, estadoPago, tipoPago})
     })
     .then(res => res.json())
     .then(data => {
@@ -1381,12 +1387,12 @@ document.addEventListener("change", function(e) {
         } else {
             alert("Error: " + data.error);
             select.disabled = false;
-            select.value = "pendiente";
+            select.value = estadoAnterior;
         }
     })
     .catch(err => {
         alert("Error de servidor: " + err);
         select.disabled = false;
-        select.value = "pendiente";
+        select.value = estadoAnterior;
     });
 });
