@@ -25,8 +25,18 @@ if(in_array($estadoPagoFiltro, ['pagado', 'pendiente', 'parcial'], true)){
 }
 
 if(in_array($tipoPagoFiltro, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
-    $where[] = "v.tipoPago = :tipoPago";
+    $where[] = "(
+        v.tipoPago = :tipoPago
+        OR EXISTS (
+            SELECT 1
+            FROM venta_pagos vpf
+            WHERE vpf.ventaID = v.ventaID
+              AND vpf.estado = 1
+              AND vpf.tipoPago = :tipoPagoPago
+        )
+    )";
     $params[':tipoPago'] = $tipoPagoFiltro;
+    $params[':tipoPagoPago'] = $tipoPagoFiltro;
 }
 
 if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
@@ -35,9 +45,29 @@ if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
 }
 
 $sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,
-               v.fechaPago, v.tipoPago, v.estado, v.estadoPago
+               v.fechaPago, v.tipoPago, v.estado, v.estadoPago,
+               COALESCE(vp.pago_efectivo, CASE WHEN v.tipoPago = 'efectivo' THEN GREATEST(v.pago - v.vuelto, 0) ELSE 0 END) AS pago_efectivo,
+               COALESCE(vp.pago_yape, CASE WHEN v.tipoPago = 'yape' THEN v.pago ELSE 0 END) AS pago_yape,
+               COALESCE(vp.pago_plin, CASE WHEN v.tipoPago = 'plin' THEN v.pago ELSE 0 END) AS pago_plin,
+               COALESCE(vp.pago_transferencia, CASE WHEN v.tipoPago = 'transferencia' THEN v.pago ELSE 0 END) AS pago_transferencia,
+               COALESCE(dp.saldo_pendiente, GREATEST(v.total - GREATEST(v.pago - v.vuelto, 0), 0)) AS saldo_pendiente
         FROM ventas v
-        INNER JOIN clientes c ON v.clienteID = c.clienteID";
+        INNER JOIN clientes c ON v.clienteID = c.clienteID
+        LEFT JOIN (
+            SELECT ventaID,
+                   SUM(CASE WHEN tipoPago = 'efectivo' THEN monto ELSE 0 END) AS pago_efectivo,
+                   SUM(CASE WHEN tipoPago = 'yape' THEN monto ELSE 0 END) AS pago_yape,
+                   SUM(CASE WHEN tipoPago = 'plin' THEN monto ELSE 0 END) AS pago_plin,
+                   SUM(CASE WHEN tipoPago = 'transferencia' THEN monto ELSE 0 END) AS pago_transferencia
+            FROM venta_pagos
+            WHERE estado = 1
+            GROUP BY ventaID
+        ) vp ON vp.ventaID = v.ventaID
+        LEFT JOIN (
+            SELECT ventaID, SUM(saldoPendiente) AS saldo_pendiente
+            FROM detalleventa
+            GROUP BY ventaID
+        ) dp ON dp.ventaID = v.ventaID";
 
 if(!empty($where)){
     $sql .= " WHERE " . implode(' AND ', $where);
@@ -61,10 +91,15 @@ echo "<table class='tabla-ventas'>
                 <th>Fecha</th>
                 <th>Fecha Pago</th>
                 <th>Cliente</th>
-                <th>Total</th>
                 <th>Pagado</th>
                 <th>Vuelto</th>
+                <th>Total</th>
+                <th>Saldo</th>
                 <th>Tipo Pago</th>
+                <th>Efectivo</th>
+                <th>Yape</th>
+                <th>Plin</th>
+                <th>Transferencia</th>
                 <th>Estado Pago</th>
                 <th>Pago saldo</th>
                 <th>Estado</th>
@@ -79,10 +114,15 @@ foreach($data as $row){
             <td>".htmlspecialchars($row['fecha'])."</td>
             <td>".htmlspecialchars($row['fechaPago'] ?: '-')."</td>
             <td>".htmlspecialchars($row['cliente'])."</td>
-            <td>".number_format((float)$row['total'], 2)."</td>
             <td>".number_format((float)$row['pago'], 2)."</td>
             <td>".number_format((float)$row['vuelto'], 2)."</td>
+            <td>".number_format((float)$row['total'], 2)."</td>
+            <td>".number_format((float)$row['saldo_pendiente'], 2)."</td>
             <td>".htmlspecialchars($row['tipoPago'])."</td>
+            <td>".number_format((float)$row['pago_efectivo'], 2)."</td>
+            <td>".number_format((float)$row['pago_yape'], 2)."</td>
+            <td>".number_format((float)$row['pago_plin'], 2)."</td>
+            <td>".number_format((float)$row['pago_transferencia'], 2)."</td>
             <td>";
 
     if((int)$row['estado'] === 1 && in_array($row['estadoPago'], ['pendiente', 'parcial'], true)){
