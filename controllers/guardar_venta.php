@@ -153,6 +153,8 @@ try {
 
     $pagosValidados = [];
     $totalPagos = 0;
+    $totalPagoEfectivo = 0;
+    $totalPagosSinEfectivo = 0;
     foreach($pagos as $pagoItem){
         $tipoPagoItem = strtolower(trim($pagoItem['tipoPago'] ?? ''));
         $montoPagoItem = round(floatval($pagoItem['monto'] ?? 0), 2);
@@ -167,18 +169,47 @@ try {
             'monto' => $montoPagoItem
         ];
         $totalPagos += $montoPagoItem;
+        if($tipoPagoItem === 'efectivo'){
+            $totalPagoEfectivo += $montoPagoItem;
+        } else {
+            $totalPagosSinEfectivo += $montoPagoItem;
+        }
     }
 
     $pagosParaCierre = [];
 
     if(!empty($pagosValidados)){
-        if(abs($totalPagos - $totalDetallePagado) > 0.01){
-            throw new Exception("Los pagos deben sumar el total abonado en productos");
+        if($totalDetallePagado <= 0.01){
+            throw new Exception("No se pueden registrar pagos si la venta queda pendiente");
+        }
+        if($totalPagos + 0.01 < $totalDetallePagado){
+            throw new Exception("Los pagos deben cubrir el total abonado en productos");
+        }
+        if($totalPagosSinEfectivo > $totalDetallePagado + 0.01){
+            throw new Exception("Los pagos sin efectivo no pueden superar el total abonado en productos");
+        }
+
+        $excedentePagos = round(max($totalPagos - $totalDetallePagado, 0), 2);
+        if($excedentePagos > $totalPagoEfectivo + 0.01){
+            throw new Exception("El vuelto solo puede salir del pago en efectivo");
         }
         $pago = $totalPagos;
-        $vuelto = 0;
+        $vuelto = $excedentePagos;
         $tipoPago = count($pagosValidados) > 1 ? 'mixto' : $pagosValidados[0]['tipoPago'];
-        $pagosParaCierre = $pagosValidados;
+
+        foreach($pagosValidados as $pagoItem){
+            $montoParaCierre = $pagoItem['monto'];
+            if($pagoItem['tipoPago'] === 'efectivo'){
+                $montoParaCierre = round(max($montoParaCierre - $excedentePagos, 0), 2);
+            }
+            if($montoParaCierre <= 0){
+                continue;
+            }
+            $pagosParaCierre[] = [
+                'tipoPago' => $pagoItem['tipoPago'],
+                'monto' => $montoParaCierre
+            ];
+        }
     } elseif($totalDetallePagado > 0){
         $tipoPago = strtolower(trim($tipoPago));
         if(!in_array($tipoPago, ['efectivo', 'yape', 'plin', 'transferencia'], true)){
