@@ -370,6 +370,39 @@ tr.inactivo{
     font-size:14px;
 }
 
+[hidden]{
+    display:none !important;
+}
+
+.modo-pago-opciones{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    width:100%;
+}
+
+.modo-pago-opciones label{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    min-height:38px;
+    padding:8px 10px;
+    border:1px solid #cfd5dc;
+    border-radius:8px;
+    background:#fff;
+    color:var(--color-texto);
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.modo-pago-opciones input{
+    width:auto;
+    min-height:auto;
+    margin:0;
+    accent-color:var(--color-principal);
+}
+
 .pagos-mixtos{
     grid-column:1 / -1;
     padding:12px;
