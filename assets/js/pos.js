@@ -410,8 +410,20 @@ function buscarClientes(q){
 function recalcularSubtotalFila(fila){
     const cantidad = parseInt(fila.querySelector(".cantidad").textContent) || 0;
     const precio = parseFloat(fila.querySelector(".precio").textContent) || 0;
-    fila.querySelector(".subtotal").textContent = (cantidad * precio).toFixed(2);
+    const subtotalCelda = fila.querySelector(".subtotal");
+    const inputPagado = fila.querySelector(".monto-detalle-pagado");
+    const subtotalAnterior = parseFloat(subtotalCelda?.textContent) || 0;
+    const montoPagadoAnterior = parseFloat(inputPagado?.value) || 0;
+    const estabaPagadoCompleto = montoPagadoAnterior >= subtotalAnterior - 0.01;
+    const nuevoSubtotal = cantidad * precio;
+
+    subtotalCelda.textContent = nuevoSubtotal.toFixed(2);
+    if(inputPagado && estabaPagadoCompleto){
+        inputPagado.value = nuevoSubtotal.toFixed(2);
+    }
+
     actualizarEstadoPagoFila(fila);
+    sincronizarEstadoVentaPorDetalles();
     actualizarPagoMixto();
 }
 
@@ -454,6 +466,10 @@ function agregarProductoTabla(prod){
     let precio = parseFloat(prod.precioVenta) || 0;
     let subtotal = cantidad * precio;
     const precioEditable = productoPermiteEditarPrecio(prod);
+    const ventaPendiente = document.getElementById("estadoPago")?.value === "pendiente";
+    const montoInicialPagado = ventaPendiente ? 0 : subtotal;
+    const saldoInicial = Math.max(subtotal - montoInicialPagado, 0);
+    const estadoInicial = ventaPendiente ? "Pendiente" : "Pagado";
 
     const fila = document.createElement("tr");
     fila.innerHTML = `
@@ -464,9 +480,9 @@ function agregarProductoTabla(prod){
         <td class="cantidad">${cantidad}</td>
         <td class="precio ${precioEditable ? "precio-editable" : ""}" data-precio-editable="${precioEditable ? "1" : "0"}" title="${precioEditable ? "Click para editar precio" : ""}">${formatearMonto(precio)}</td>
         <td class="subtotal">${subtotal.toFixed(2)}</td>
-        <td><input type="number" step="0.01" min="0" class="monto-detalle-pagado" value="${subtotal.toFixed(2)}"></td>
-        <td class="saldo-detalle">0.00</td>
-        <td class="estado-detalle-pago">Pagado</td>
+        <td><input type="number" step="0.01" min="0" class="monto-detalle-pagado" value="${montoInicialPagado.toFixed(2)}"></td>
+        <td class="saldo-detalle">${saldoInicial.toFixed(2)}</td>
+        <td class="estado-detalle-pago">${estadoInicial}</td>
         <td class="acciones">
             <i class="fa-solid fa-pen editar"></i>
             ${precioEditable ? '<i class="fa-solid fa-dollar-sign editar-precio" title="Editar precio"></i>' : ''}
@@ -585,17 +601,32 @@ function sumarPagosMixtos(){
     return obtenerPagosMixtos().reduce((sum, pago) => sum + pago.monto, 0);
 }
 
+function obtenerResumenPagosMixtos(){
+    return obtenerPagosMixtos().reduce((resumen, pago) => {
+        resumen.total += pago.monto;
+        if(pago.tipoPago === "efectivo"){
+            resumen.efectivo += pago.monto;
+        } else {
+            resumen.sinEfectivo += pago.monto;
+        }
+        return resumen;
+    }, { total: 0, efectivo: 0, sinEfectivo: 0 });
+}
+
 function actualizarPagoMixto(){
     const pagoInput = document.getElementById("pago");
     const vueltoInput = document.getElementById("vuelto");
     const totalPagadoDetalle = obtenerTotalPagadoDetalle();
-    const totalPagos = sumarPagosMixtos();
+    const resumenPagos = obtenerResumenPagosMixtos();
+    const totalPagos = resumenPagos.total;
+    const excedente = Math.max(totalPagos - totalPagadoDetalle, 0);
+    const vuelto = excedente <= resumenPagos.efectivo + 0.01 ? excedente : 0;
 
     if(pagoInput){
         pagoInput.value = totalPagos > 0 ? totalPagos.toFixed(2) : pagoInput.value;
     }
     if(vueltoInput){
-        vueltoInput.value = Math.max(totalPagos - totalPagadoDetalle, 0).toFixed(2);
+        vueltoInput.value = vuelto.toFixed(2);
     }
 }
 
@@ -708,7 +739,9 @@ function guardarVenta(){
     let productos = [];
     const pagos = obtenerPagosMixtos();
     const totalPagadoDetalle = obtenerTotalPagadoDetalle();
-    const totalPagosMixtos = sumarPagosMixtos();
+    const resumenPagosMixtos = obtenerResumenPagosMixtos();
+    const totalPagosMixtos = resumenPagosMixtos.total;
+    const excedentePagosMixtos = Math.max(totalPagosMixtos - totalPagadoDetalle, 0);
 
     filas.forEach(fila => {
         productos.push({
@@ -730,13 +763,30 @@ function guardarVenta(){
     }
 
     if(pagos.length > 0){
-        if(Math.abs(totalPagosMixtos - totalPagadoDetalle) > 0.01){
-            alert("Los pagos ingresados deben sumar S/ " + totalPagadoDetalle.toFixed(2) + " segun los productos marcados como pagados.");
+        if(totalPagadoDetalle <= 0.01){
+            alert("No ingreses pagos si la venta queda pendiente.");
+            resetBoton(btn);
+            return;
+        }
+        if(totalPagosMixtos + 0.01 < totalPagadoDetalle){
+            alert("Los pagos ingresados deben cubrir S/ " + totalPagadoDetalle.toFixed(2) + " segun los productos marcados como pagados.");
+            resetBoton(btn);
+            return;
+        }
+        if(resumenPagosMixtos.sinEfectivo > totalPagadoDetalle + 0.01){
+            alert("Los pagos por Yape, Plin o Transferencia no pueden superar S/ " + totalPagadoDetalle.toFixed(2) + ".");
+            resetBoton(btn);
+            return;
+        }
+        if(excedentePagosMixtos > resumenPagosMixtos.efectivo + 0.01){
+            alert("El vuelto solo puede salir del pago en efectivo.");
             resetBoton(btn);
             return;
         }
         pago = totalPagosMixtos;
-        vuelto = 0;
+        vuelto = excedentePagosMixtos;
+        document.getElementById("pago").value = pago.toFixed(2);
+        document.getElementById("vuelto").value = vuelto.toFixed(2);
     } else if(estadoPago === "pendiente"){
         document.getElementById("pago").value = "0.00";
         document.getElementById("vuelto").value = "0.00";
@@ -1084,13 +1134,30 @@ window.initCierres = function() {
         return (parseFloat(valor) || 0).toFixed(2);
     }
 
+    function limpiarMontoEditable(valor){
+        const limpio = String(valor)
+            .replace(/,/g, '.')
+            .replace(/[^\d.]/g, '');
+        const partes = limpio.split('.');
+
+        if(partes.length <= 2){
+            return limpio;
+        }
+
+        return partes.shift() + '.' + partes.join('');
+    }
+
+    function leerMontoEditable(valor){
+        return parseFloat(limpiarMontoEditable(valor)) || 0;
+    }
+
     function actualizarObservaciones(){
         let sumaFisico = 0;
         let sumaDiferencia = 0;
 
         inputsFisico.forEach(input => {
             const totalRecibido = parseFloat(input.dataset.total) || 0;
-            const fisico = parseFloat(String(input.value).replace(/[^\d.-]/g,'')) || 0;
+            const fisico = leerMontoEditable(input.value);
             const diferencia = fisico - totalRecibido;
             const fila = input.closest('tr');
             const obs = fila ? fila.querySelector('.obs') : null;
@@ -1133,9 +1200,7 @@ window.initCierres = function() {
         if(input.hasAttribute('readonly')) return;
 
         input.addEventListener('input', () => {
-            input.value = input.value
-                .replace(/[^\d.]/g,'')
-                .replace(/(\..*)\./g, '$1');
+            input.value = limpiarMontoEditable(input.value);
             actualizarObservaciones();
         });
 
@@ -1156,7 +1221,7 @@ window.initCierres = function() {
 
         const cierresData = [];
         inputsFisico.forEach(input => {
-            const fisico = parseFloat(String(input.value).replace(/[^\d.-]/g,'')) || 0;
+            const fisico = leerMontoEditable(input.value);
             cierresData.push({
                 tipopago: input.dataset.tipopago,
                 fisico
