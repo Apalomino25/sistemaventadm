@@ -13,7 +13,7 @@ function buscarProductoInventario(params){
             if(!json.ok){
                 throw new Error(json.error || "No se pudo buscar el producto");
             }
-            return json.existe ? json.producto : null;
+            return json;
         });
 }
 
@@ -50,6 +50,47 @@ function ocultarFormularioInventario(){
     if(form){
         form.classList.add("oculto");
     }
+}
+
+function ocultarResultadosInventario(){
+    const contenedor = document.getElementById("resultadosInventario");
+    if(!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.classList.add("oculto");
+}
+
+function mostrarResultadosInventario(productos){
+    const contenedor = document.getElementById("resultadosInventario");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    productos.forEach(producto => {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.className = "resultado-inventario";
+
+        const nombre = document.createElement("strong");
+        nombre.textContent = producto.nombre || "";
+
+        const detalle = document.createElement("span");
+        detalle.textContent = `Codigo: ${producto.codigo || "-"} | Stock: ${producto.stock || 0} | Vence: ${producto.fechaVencimiento || "-"}`;
+
+        boton.appendChild(nombre);
+        boton.appendChild(detalle);
+        boton.addEventListener("click", () => {
+            const buscador = document.getElementById("codigoBusquedaInventario");
+            if(buscador){
+                buscador.value = producto.codigo || producto.nombre || "";
+            }
+            ocultarResultadosInventario();
+            cargarProductoExistente(producto);
+        });
+
+        contenedor.appendChild(boton);
+    });
+
+    contenedor.classList.remove("oculto");
 }
 
 function limpiarCamposCrear(form){
@@ -134,6 +175,7 @@ function prepararProductoNuevo(codigo){
 function limpiarInventario(){
     const form = obtenerFormInventario();
     const buscador = document.getElementById("codigoBusquedaInventario");
+    ocultarResultadosInventario();
     if(form){
         form.reset();
         form.elements.productoID.value = "";
@@ -148,7 +190,7 @@ function limpiarInventario(){
     if(ficha) ficha.classList.add("oculto");
     setCamposCrearVisibles(false);
     ocultarFormularioInventario();
-    mostrarMensajeInventario("Ingresa un codigo para buscar el producto.", "nuevo");
+    mostrarMensajeInventario("Ingresa un codigo o nombre y presiona Enter.", "nuevo");
 }
 
 function buscarCodigoInventario(){
@@ -163,10 +205,20 @@ function buscarCodigoInventario(){
     mostrarMensajeInventario("Buscando producto...", "nuevo");
 
     buscarProductoInventario({codigo})
-        .then(producto => {
+        .then(respuesta => {
             if(secuenciaActual !== inventarioBusquedaSecuencia) return;
-            if(producto){
-                cargarProductoExistente(producto);
+
+            if(respuesta.multiple && Array.isArray(respuesta.productos)){
+                ocultarFormularioInventario();
+                mostrarResultadosInventario(respuesta.productos);
+                mostrarMensajeInventario("Se encontraron varios productos. Selecciona uno de la lista.", "existente");
+                return;
+            }
+
+            ocultarResultadosInventario();
+
+            if(respuesta.existe && respuesta.producto){
+                cargarProductoExistente(respuesta.producto);
             } else {
                 prepararProductoNuevo(codigo);
             }
@@ -182,7 +234,16 @@ document.addEventListener("input", function(e){
     if(e.target.id !== "codigoBusquedaInventario") return;
 
     clearTimeout(inventarioBusquedaTimer);
-    inventarioBusquedaTimer = setTimeout(buscarCodigoInventario, 350);
+    inventarioBusquedaSecuencia++;
+    ocultarResultadosInventario();
+
+    if(e.target.value.trim() === ""){
+        limpiarInventario();
+        return;
+    }
+
+    ocultarFormularioInventario();
+    mostrarMensajeInventario("Termina de escribir y presiona Enter o Buscar.", "nuevo");
 });
 
 document.addEventListener("keydown", function(e){
@@ -203,11 +264,12 @@ document.addEventListener("click", function(e){
 
     mostrarMensajeInventario("Cargando producto...", "nuevo");
     buscarProductoInventario({productoID: btnStock.dataset.productoId})
-        .then(producto => {
-            if(producto){
+        .then(respuesta => {
+            if(respuesta.existe && respuesta.producto){
                 const buscador = document.getElementById("codigoBusquedaInventario");
-                if(buscador) buscador.value = producto.codigo || "";
-                cargarProductoExistente(producto);
+                if(buscador) buscador.value = respuesta.producto.codigo || "";
+                ocultarResultadosInventario();
+                cargarProductoExistente(respuesta.producto);
                 document.querySelector(".inventario-buscador")?.scrollIntoView({behavior: "smooth", block: "start"});
             }
         })
