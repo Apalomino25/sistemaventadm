@@ -98,7 +98,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
     <div class="inventario-header">
         <div>
             <h2>Inventarios</h2>
-            <p>Ingresa el codigo del producto. Si ya existe, el sistema cargara sus datos y podras editar el stock; si no existe, completa el formulario para crearlo.</p>
+            <p>Busca por codigo o nombre. Si el producto existe, el sistema cargara sus datos y podras editar el stock; si no existe, completa el formulario para crearlo.</p>
         </div>
     </div>
 
@@ -133,16 +133,17 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
     <?php endif; ?>
 
     <div class="inventario-buscador">
-        <label for="codigoBusquedaInventario">Buscar por codigo de barra</label>
+        <label for="codigoBusquedaInventario">Buscar por codigo o nombre</label>
         <div class="inventario-buscador-linea">
-            <input type="text" id="codigoBusquedaInventario" autocomplete="off" placeholder="Escanea o escribe el codigo">
+            <input type="text" id="codigoBusquedaInventario" autocomplete="off" placeholder="Escanea el codigo o escribe el nombre">
             <button type="button" id="btnBuscarInventario">Buscar</button>
         </div>
     </div>
 
     <div id="mensajeInventario" class="mensaje-inventario nuevo">
-        Ingresa un codigo para buscar el producto.
+        Ingresa un codigo o nombre y presiona Enter.
     </div>
+    <div id="resultadosInventario" class="resultados-inventario oculto"></div>
 
     <form id="formInventario" class="inventario-form inventario-form-resultado oculto">
         <input type="hidden" name="productoID" id="productoID">
