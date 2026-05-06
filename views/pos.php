@@ -132,7 +132,21 @@
                 <input type="number" id="total" readonly>
             </div>
 
-            <div class="campoItem">
+            <div class="campoItem campo-modo-pago">
+                <label class="txt-campos">MODO PAGO</label>
+                <div class="modo-pago-opciones">
+                    <label>
+                        <input type="radio" name="modoPago" value="unico" checked>
+                        Pago unico
+                    </label>
+                    <label>
+                        <input type="radio" name="modoPago" value="multiple">
+                        Pago multiple
+                    </label>
+                </div>
+            </div>
+
+            <div class="campoItem campo-tipo-pago">
                 <label class="txt-campos">TIPO PAGO</label>
                 <select id="tipoPago">
                     <option value="efectivo" selected>Efectivo</option>
@@ -142,7 +156,7 @@
                 </select>
             </div>
 
-            <div class="pagos-mixtos">
+            <div class="pagos-mixtos" id="pagosMixtos" hidden>
                 <label>Pagos de esta venta</label>
                 <div class="pagos-grid">
                     <div><span>Efectivo</span><input type="number" step="0.01" min="0" id="pagoEfectivo" class="pago-mixto" data-tipopago="efectivo" value="0.00"></div>
