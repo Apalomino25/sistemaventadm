@@ -150,7 +150,7 @@
                     <div><span>Plin</span><input type="number" step="0.01" min="0" id="pagoPlin" class="pago-mixto" data-tipopago="plin" value="0.00"></div>
                     <div><span>Transferencia</span><input type="number" step="0.01" min="0" id="pagoTransferencia" class="pago-mixto" data-tipopago="transferencia" value="0.00"></div>
                 </div>
-                <small>Si dejas productos pendientes, los pagos deben sumar solo los productos pagados.</small>
+                <small>Si dejas productos pendientes, registra solo lo abonado; en efectivo puedes ingresar lo recibido para calcular vuelto.</small>
             </div>
 
             <div class="campoItem">
