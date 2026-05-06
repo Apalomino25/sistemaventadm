@@ -96,6 +96,40 @@
     background:#f8fafc;
 }
 
+.resultados-inventario{
+    display:grid;
+    gap:8px;
+    margin:0 0 12px;
+}
+
+.resultado-inventario{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    width:100%;
+    border:1px solid #d7dce2;
+    border-radius:8px;
+    padding:10px 12px;
+    background:#fff;
+    color:#1f2937;
+    text-align:left;
+    cursor:pointer;
+}
+
+.resultado-inventario:hover{
+    border-color:#FF1493;
+    background:#fff0f7;
+}
+
+.resultado-inventario strong{
+    color:#b00063;
+}
+
+.resultado-inventario span{
+    color:#555;
+    font-size:12px;
+}
+
 .inventario-form{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
