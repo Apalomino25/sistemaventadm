@@ -109,6 +109,13 @@ window.iniciarPOS = function() {
         });
     }
 
+    document.querySelectorAll("input[name='modoPago']").forEach(input => {
+        input.addEventListener("change", () => {
+            sincronizarModoPago();
+            actualizarCamposPago();
+        });
+    });
+
     const estadoPagoSelect = document.getElementById("estadoPago");
     if(estadoPagoSelect){
         estadoPagoSelect.addEventListener("change", () => {
@@ -134,6 +141,8 @@ window.iniciarPOS = function() {
             actualizarPagoMixto();
         });
     });
+
+    sincronizarModoPago();
 };
 
 // =======================
@@ -583,7 +592,55 @@ function actualizarEstadoPagoFila(fila){
     if(estadoCelda) estadoCelda.textContent = estado.charAt(0).toUpperCase() + estado.slice(1);
 }
 
+function obtenerModoPago(){
+    const radio = document.querySelector("input[name='modoPago']:checked");
+    return radio && radio.value === "multiple" ? "multiple" : "unico";
+}
+
+function esPagoMultiple(){
+    return obtenerModoPago() === "multiple";
+}
+
+function limpiarPagosMixtos(){
+    document.querySelectorAll(".pago-mixto").forEach(input => {
+        input.value = "0.00";
+    });
+}
+
+function sincronizarModoPago(){
+    const multiple = esPagoMultiple();
+    const pagosMixtos = document.getElementById("pagosMixtos") || document.querySelector(".pagos-mixtos");
+    const campoTipoPago = document.querySelector(".campo-tipo-pago");
+    const tipoPagoSelect = document.getElementById("tipoPago");
+
+    if(pagosMixtos){
+        pagosMixtos.hidden = !multiple;
+    }
+
+    if(campoTipoPago){
+        campoTipoPago.hidden = multiple;
+    }
+
+    if(tipoPagoSelect){
+        tipoPagoSelect.disabled = multiple;
+    }
+
+    document.querySelectorAll(".pago-mixto").forEach(input => {
+        input.disabled = !multiple;
+    });
+
+    if(!multiple){
+        limpiarPagosMixtos();
+    } else {
+        actualizarPagoMixto();
+    }
+}
+
 function obtenerPagosMixtos(){
+    if(!esPagoMultiple()){
+        return [];
+    }
+
     const pagos = [];
     document.querySelectorAll(".pago-mixto").forEach(input => {
         const monto = parseFloat(input.value) || 0;
@@ -614,6 +671,10 @@ function obtenerResumenPagosMixtos(){
 }
 
 function actualizarPagoMixto(){
+    if(!esPagoMultiple()){
+        return;
+    }
+
     const pagoInput = document.getElementById("pago");
     const vueltoInput = document.getElementById("vuelto");
     const totalPagadoDetalle = obtenerTotalPagadoDetalle();
@@ -623,7 +684,7 @@ function actualizarPagoMixto(){
     const vuelto = excedente <= resumenPagos.efectivo + 0.01 ? excedente : 0;
 
     if(pagoInput){
-        pagoInput.value = totalPagos > 0 ? totalPagos.toFixed(2) : pagoInput.value;
+        pagoInput.value = totalPagos > 0 ? totalPagos.toFixed(2) : "0.00";
     }
     if(vueltoInput){
         vueltoInput.value = vuelto.toFixed(2);
@@ -645,6 +706,12 @@ function actualizarCamposPago(){
     const total = parseFloat(document.getElementById("total")?.value) || 0;
 
     if(!tipoPagoSelect || !estadoPagoSelect || !pagoInput || !vueltoInput) return;
+
+    if(esPagoMultiple()){
+        pagoInput.setAttribute("readonly", true);
+        actualizarPagoMixto();
+        return;
+    }
 
     if(estadoPagoSelect.value === "pendiente"){
         pagoInput.value = "0.00";
@@ -734,10 +801,11 @@ function guardarVenta(){
     const tipoPago = document.getElementById("tipoPago").value;
     const estadoPago = document.getElementById("estadoPago").value;
     const clienteID = parseInt(document.getElementById("clienteID")?.value) || 0;
+    const modoPago = obtenerModoPago();
 
     const filas = document.querySelectorAll("#tabla-ventas tr");
     let productos = [];
-    const pagos = obtenerPagosMixtos();
+    const pagos = modoPago === "multiple" ? obtenerPagosMixtos() : [];
     const totalPagadoDetalle = obtenerTotalPagadoDetalle();
     const resumenPagosMixtos = obtenerResumenPagosMixtos();
     const totalPagosMixtos = resumenPagosMixtos.total;
@@ -758,6 +826,12 @@ function guardarVenta(){
     // 🔴 Validaciones
     if(productos.length === 0){
         alert("No hay productos en la venta");
+        resetBoton(btn);
+        return;
+    }
+
+    if(modoPago === "multiple" && totalPagadoDetalle > 0.01 && pagos.length === 0){
+        alert("Ingresa al menos un monto en pagos multiples.");
         resetBoton(btn);
         return;
     }
@@ -855,8 +929,13 @@ function guardarVenta(){
             document.getElementById("vuelto").value = "";
             document.getElementById("tipoPago").value = "efectivo";
             document.getElementById("estadoPago").value = "pagado";
+            const modoPagoUnico = document.querySelector("input[name='modoPago'][value='unico']");
+            if(modoPagoUnico){
+                modoPagoUnico.checked = true;
+            }
             document.querySelectorAll(".pago-mixto").forEach(input => input.value = "0.00");
             usarClienteGeneral();
+            sincronizarModoPago();
             actualizarCamposPago();
             document.getElementById("codigo").focus();
 
