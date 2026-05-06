@@ -239,12 +239,13 @@ foreach($cierres as $c){
                 <td>S/ <?= number_format($c['total_ganancia'], 2, '.', '') ?></td>
                 <td>
                     <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputmode="decimal"
                         class="fisico"
                         data-tipopago="<?= htmlspecialchars($c['tipopago']) ?>"
                         data-total="<?= number_format($c['total_recibido'], 2, '.', '') ?>"
                         value="<?= number_format($c['fisico'], 2, '.', '') ?>"
+                        autocomplete="off"
                         <?= $cierreRealizado ? 'readonly' : '' ?>
                     >
                 </td>
