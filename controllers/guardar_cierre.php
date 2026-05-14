@@ -168,10 +168,10 @@ try {
     $insert = $conn->prepare("
         INSERT INTO cierres
         (fecha, tipopago, total_ventas, total_pagado, total_pendiente, total_pendientes_cobrados, total_recibido,
-         total_vuelto, total_compra, total_ganancia, fisico, observacion, usuarioID, estado)
+         total_vuelto, total_compra, total_ganancia, fisico, observacion, usuarioID, usuario_cierre, estado)
         VALUES
         (:fecha, :tipopago, :total_ventas, :total_pagado, :total_pendiente, :total_pendientes_cobrados, :total_recibido,
-         :total_vuelto, :total_compra, :total_ganancia, :fisico, :observacion, :usuarioID, 1)
+         :total_vuelto, :total_compra, :total_ganancia, :fisico, :observacion, :usuarioID, :usuario_cierre, 1)
     ");
 
     foreach($resumenes as $resumen){
@@ -201,7 +201,8 @@ try {
             ':total_ganancia' => floatval($resumen['total_ganancia']),
             ':fisico' => $fisico,
             ':observacion' => $observacion,
-            ':usuarioID' => $usuarioID
+            ':usuarioID' => $usuarioID,
+            ':usuario_cierre' => $usuarioID
         ]);
     }
 
