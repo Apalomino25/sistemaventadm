@@ -263,7 +263,7 @@ function mostrarResultadosBusqueda(productos){
 
         const meta = document.createElement("span");
         meta.className = "resultado-meta";
-        meta.textContent = `Cod: ${prod.codigo || "-"} | Stock: ${prod.stock} | Vence: ${prod.fechaVencimiento || "-"} | S/ ${formatearMonto(prod.precioVenta)}`;
+        meta.textContent = `Cod: ${prod.codigo || "-"} | Stock: ${prod.stock} | Vence: ${formatearFechaVencimiento(prod.fechaVencimiento)} | S/ ${formatearMonto(prod.precioVenta)}`;
 
         info.appendChild(nombre);
         info.appendChild(descripcion);
@@ -303,6 +303,16 @@ function productoPermiteEditarPrecio(prod){
 
 function formatearMonto(valor){
     return (parseFloat(valor) || 0).toFixed(2);
+}
+
+function formatearFechaVencimiento(valor){
+    if(!valor) return "-";
+
+    const fecha = String(valor).split(" ")[0];
+    const partes = fecha.split("-");
+    if(partes.length !== 3) return fecha;
+
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
 function iniciarClientePOS(){
@@ -460,7 +470,7 @@ function agregarProductoTabla(prod){
 
     // Si ya existe → sumar cantidad
     for(let fila of filas){
-        if(fila.children[0].textContent == prod.productoID){
+        if(fila.querySelector(".producto-id")?.textContent == prod.productoID){
             let cantidadCelda = fila.querySelector(".cantidad");
             let cantidad = parseInt(cantidadCelda.textContent) + 1;
             cantidadCelda.textContent = cantidad;
@@ -479,13 +489,15 @@ function agregarProductoTabla(prod){
     const montoInicialPagado = ventaPendiente ? 0 : subtotal;
     const saldoInicial = Math.max(subtotal - montoInicialPagado, 0);
     const estadoInicial = ventaPendiente ? "Pendiente" : "Pagado";
+    const fechaVencimiento = formatearFechaVencimiento(prod.fechaVencimiento);
 
     const fila = document.createElement("tr");
     fila.innerHTML = `
-        <td>${prod.productoID}</td>
+        <td class="producto-id">${prod.productoID}</td>
         <td>${prod.nombre}</td>
         <td>${prod.descripcion}</td>
         <td>${prod.stock}</td>
+        <td class="fecha-vencimiento">${fechaVencimiento}</td>
         <td class="cantidad">${cantidad}</td>
         <td class="precio ${precioEditable ? "precio-editable" : ""}" data-precio-editable="${precioEditable ? "1" : "0"}" title="${precioEditable ? "Click para editar precio" : ""}">${formatearMonto(precio)}</td>
         <td class="subtotal">${subtotal.toFixed(2)}</td>
@@ -548,7 +560,7 @@ function calcularTotal(){
     const tabla = document.getElementById("tabla-ventas");
     const filas = tabla.querySelectorAll("tr");
     let total = 0;
-    filas.forEach(fila => total += parseFloat(fila.children[6].textContent));
+    filas.forEach(fila => total += parseFloat(fila.querySelector(".subtotal")?.textContent) || 0);
     document.getElementById("total").value = total.toFixed(2);
 
     const tipoPagoSelect = document.getElementById("tipoPago");
@@ -813,10 +825,10 @@ function guardarVenta(){
 
     filas.forEach(fila => {
         productos.push({
-            productoID: parseInt(fila.children[0].textContent),
-            cantidad: parseInt(fila.children[4].textContent),
-            precio: parseFloat(fila.children[5].textContent),
-            subtotal: parseFloat(fila.children[6].textContent),
+            productoID: parseInt(fila.querySelector(".producto-id")?.textContent),
+            cantidad: parseInt(fila.querySelector(".cantidad")?.textContent),
+            precio: parseFloat(fila.querySelector(".precio")?.textContent),
+            subtotal: parseFloat(fila.querySelector(".subtotal")?.textContent),
             montoPagado: parseFloat(fila.querySelector(".monto-detalle-pagado")?.value) || 0,
             saldoPendiente: parseFloat(fila.querySelector(".saldo-detalle")?.textContent) || 0,
             estadoPago: fila.querySelector(".estado-detalle-pago")?.textContent.trim().toLowerCase() || "pagado"
