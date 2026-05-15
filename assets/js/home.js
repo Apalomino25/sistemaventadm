@@ -43,6 +43,9 @@ function cargarPagina(pagina){
 
             // Inicializar POS si existe
             if(typeof iniciarPOS === "function") iniciarPOS();
+            if(pagina.includes("inventarios.php") && typeof inicializarInventarios === "function"){
+                inicializarInventarios();
+            }
 
             // Inicializar cierres si se cargó cierres.php
            if(pagina.includes("cierres.php") && typeof initCierres === "function"){
