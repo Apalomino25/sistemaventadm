@@ -16,6 +16,14 @@ $categorias = $conn->query("
     ORDER BY nombre
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$categoriasGestion = $conn->query("
+    SELECT c.categoriaID, c.nombre, COUNT(p.productoID) AS total_productos
+    FROM categoria c
+    LEFT JOIN productos p ON p.categoriaID = c.categoriaID
+    GROUP BY c.categoriaID, c.nombre
+    ORDER BY c.nombre
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $productos = $conn->query("
     SELECT p.productoID, p.codigo, p.nombre, p.descripcion, p.precioCompra,
            p.precioVenta, p.stock, p.fechaVencimiento, p.estado, p.categoriaID,
@@ -98,54 +106,39 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
     <div class="inventario-header">
         <div>
             <h2>Inventarios</h2>
-            <p>Busca por codigo o nombre. Si el producto existe, el sistema cargara sus datos y podras editar el stock; si no existe, completa el formulario para crearlo.</p>
+            
         </div>
+        <button type="button"
+                class="alertas-toggle <?= !empty($alertasInventario) ? 'con-alertas' : 'sin-alertas' ?>"
+                id="btnAlertasInventario"
+                aria-expanded="false"
+                aria-controls="panelAlertasInventario">
+            <span class="alertas-toggle-icon" aria-hidden="true"></span>
+            <span>Alertas</span>
+            <b><?= count($alertasInventario) ?></b>
+        </button>
     </div>
 
-    <?php if(!empty($alertasInventario)): ?>
-    <div class="alertas-inventario">
-        <h3>Alertas de inventario</h3>
-        <div class="alertas-grid">
-            <?php foreach($alertasInventario as $alerta): ?>
-                <?php
-                    $dias = $alerta['dias_para_vencer'];
-                    $estaVencido = $dias !== null && intval($dias) < 0;
-                    $vencePronto = $dias !== null && intval($dias) >= 0 && intval($dias) <= $diasAlertaVencimiento;
-                    $stockBajo = intval($alerta['stock']) < 5;
-                ?>
-                <div class="alerta-card <?= $estaVencido ? 'critica' : ($vencePronto ? 'vence' : 'stock') ?>">
-                    <strong><?= htmlspecialchars($alerta['nombre']) ?></strong>
-                    <span>Codigo: <?= htmlspecialchars($alerta['codigo']) ?> | Stock: <?= intval($alerta['stock']) ?></span>
-                    <span>Vence: <?= $alerta['fechaVencimiento'] ? date('d-m-Y', strtotime($alerta['fechaVencimiento'])) : '-' ?></span>
-                    <b>
-                        <?php if($estaVencido): ?>
-                            Producto vencido
-                        <?php elseif($vencePronto): ?>
-                            Vence en <?= intval($dias) ?> dias
-                        <?php endif; ?>
-                        <?= ($vencePronto || $estaVencido) && $stockBajo ? ' / ' : '' ?>
-                        <?= $stockBajo ? 'Stock menor a 5' : '' ?>
-                    </b>
-                </div>
-            <?php endforeach; ?>
+    <div class="inventario-tabs" role="tablist" aria-label="Opciones de inventario">
+        <button type="button" class="inventario-tab activo" data-inventario-panel="productos">Productos</button>
+        <button type="button" class="inventario-tab" data-inventario-panel="categorias">Categorias</button>
+    </div>
+
+    <section id="panelProductosInventario" class="inventario-panel activo">
+        <div class="inventario-buscador">
+            <label for="codigoBusquedaInventario">Buscar por codigo o nombre</label>
+            <div class="inventario-buscador-linea">
+                <input type="text" id="codigoBusquedaInventario" autocomplete="off" placeholder="Escanea el codigo o escribe el nombre">
+                <button type="button" id="btnBuscarInventario">Buscar</button>
+            </div>
         </div>
-    </div>
-    <?php endif; ?>
 
-    <div class="inventario-buscador">
-        <label for="codigoBusquedaInventario">Buscar por codigo o nombre</label>
-        <div class="inventario-buscador-linea">
-            <input type="text" id="codigoBusquedaInventario" autocomplete="off" placeholder="Escanea el codigo o escribe el nombre">
-            <button type="button" id="btnBuscarInventario">Buscar</button>
+        <div id="mensajeInventario" class="mensaje-inventario nuevo">
+            Ingresa un codigo o nombre y presiona Enter.
         </div>
-    </div>
+        <div id="resultadosInventario" class="resultados-inventario oculto"></div>
 
-    <div id="mensajeInventario" class="mensaje-inventario nuevo">
-        Ingresa un codigo o nombre y presiona Enter.
-    </div>
-    <div id="resultadosInventario" class="resultados-inventario oculto"></div>
-
-    <form id="formInventario" class="inventario-form inventario-form-resultado oculto">
+        <form id="formInventario" class="inventario-form inventario-form-resultado oculto">
         <input type="hidden" name="productoID" id="productoID">
         <input type="hidden" name="modo" id="modoInventario" value="crear">
         <input type="hidden" name="codigo" id="codigoInventario">
@@ -196,7 +189,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
             <input type="number" name="stock" min="1" step="1" required>
         </div>
 
-        <div class="campo campo-crear">
+        <div class="campo">
             <label>Fecha vencimiento</label>
             <input type="date" name="fechaVencimiento" required>
         </div>
@@ -205,53 +198,133 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
             <button type="submit">Guardar ingreso</button>
             <button type="reset" class="secundario">Limpiar</button>
         </div>
-    </form>
+        </form>
 
-    <h3>Productos y lotes para venta FEFO</h3>
-    <table class="tabla-ventas">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Codigo</th>
-                <th>Producto</th>
-                <th>Categoria</th>
-                <th>Compra</th>
-                <th>Venta</th>
-                <th>Stock</th>
-                <th>Vencimiento</th>
-                <th>Alerta</th>
-                <th>Estado</th>
-                <th>Accion</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach($productos as $p): ?>
-            <?php $estadoLote = estadoLoteInventario($p, $diasAlertaVencimiento); ?>
-            <tr class="fila-<?= htmlspecialchars($estadoLote['clase']) ?>">
-                <td><?= intval($p['productoID']) ?></td>
-                <td><?= htmlspecialchars($p['codigo']) ?></td>
-                <td>
-                    <strong><?= htmlspecialchars($p['nombre']) ?></strong><br>
-                    <span><?= htmlspecialchars($p['descripcion'] ?? '') ?></span>
-                </td>
-                <td><?= htmlspecialchars($p['categoria'] ?? '') ?></td>
-                <td>S/ <?= number_format($p['precioCompra'], 2) ?></td>
-                <td>S/ <?= number_format($p['precioVenta'], 2) ?></td>
-                <td><?= intval($p['stock']) ?></td>
-                <td><?= $p['fechaVencimiento'] ? date('d-m-Y', strtotime($p['fechaVencimiento'])) : '-' ?></td>
-                <td><span class="badge-alerta <?= htmlspecialchars($estadoLote['clase']) ?>"><?= htmlspecialchars($estadoLote['texto']) ?></span></td>
-                <td><?= intval($p['estado']) === 1 ? 'Activo' : 'Inactivo' ?></td>
-                <td>
-                    <button type="button"
-                            class="btn-editar-stock"
-                            data-producto-id="<?= intval($p['productoID']) ?>">
-                        Stock
-                    </button>
-                </td>
-            </tr>
+        <div class="alertas-inventario oculto" id="panelAlertasInventario">
+        <div class="alertas-panel-header">
+            <h3>Alertas de inventario</h3>
+            <button type="button" id="btnCerrarAlertasInventario">Cerrar</button>
+        </div>
+        <?php if(!empty($alertasInventario)): ?>
+        <div class="alertas-grid">
+            <?php foreach($alertasInventario as $alerta): ?>
+                <?php
+                    $dias = $alerta['dias_para_vencer'];
+                    $estaVencido = $dias !== null && intval($dias) < 0;
+                    $vencePronto = $dias !== null && intval($dias) >= 0 && intval($dias) <= $diasAlertaVencimiento;
+                    $stockBajo = intval($alerta['stock']) < 5;
+                ?>
+                <div class="alerta-card <?= $estaVencido ? 'critica' : ($vencePronto ? 'vence' : 'stock') ?>">
+                    <strong><?= htmlspecialchars($alerta['nombre']) ?></strong>
+                    <span>Codigo: <?= htmlspecialchars($alerta['codigo']) ?> | Stock: <?= intval($alerta['stock']) ?></span>
+                    <span>Vence: <?= $alerta['fechaVencimiento'] ? date('d-m-Y', strtotime($alerta['fechaVencimiento'])) : '-' ?></span>
+                    <b>
+                        <?php if($estaVencido): ?>
+                            Producto vencido
+                        <?php elseif($vencePronto): ?>
+                            Vence en <?= intval($dias) ?> dias
+                        <?php endif; ?>
+                        <?= ($vencePronto || $estaVencido) && $stockBajo ? ' / ' : '' ?>
+                        <?= $stockBajo ? 'Stock menor a 5' : '' ?>
+                    </b>
+                </div>
             <?php endforeach; ?>
-        </tbody>
-    </table>
+        </div>
+        <?php else: ?>
+        <div class="alertas-vacio">Sin productos por vencer ni stock bajo.</div>
+        <?php endif; ?>
+        </div>
+
+        <h3>Productos y lotes para venta FEFO</h3>
+        <table class="tabla-ventas">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Codigo</th>
+                    <th>Producto</th>
+                    <th>Categoria</th>
+                    <th>Compra</th>
+                    <th>Venta</th>
+                    <th>Stock</th>
+                    <th>Vencimiento</th>
+                    <th>Alerta</th>
+                    <th>Estado</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($productos as $p): ?>
+                <?php $estadoLote = estadoLoteInventario($p, $diasAlertaVencimiento); ?>
+                <tr class="fila-<?= htmlspecialchars($estadoLote['clase']) ?>">
+                    <td><?= intval($p['productoID']) ?></td>
+                    <td><?= htmlspecialchars($p['codigo']) ?></td>
+                    <td>
+                        <strong><?= htmlspecialchars($p['nombre']) ?></strong><br>
+                        <span><?= htmlspecialchars($p['descripcion'] ?? '') ?></span>
+                    </td>
+                    <td><?= htmlspecialchars($p['categoria'] ?? '') ?></td>
+                    <td>S/ <?= number_format($p['precioCompra'], 2) ?></td>
+                    <td>S/ <?= number_format($p['precioVenta'], 2) ?></td>
+                    <td><?= intval($p['stock']) ?></td>
+                    <td><?= $p['fechaVencimiento'] ? date('d-m-Y', strtotime($p['fechaVencimiento'])) : '-' ?></td>
+                    <td><span class="badge-alerta <?= htmlspecialchars($estadoLote['clase']) ?>"><?= htmlspecialchars($estadoLote['texto']) ?></span></td>
+                    <td><?= intval($p['estado']) === 1 ? 'Activo' : 'Inactivo' ?></td>
+                    <td>
+                        <button type="button"
+                                class="btn-editar-stock"
+                                data-producto-id="<?= intval($p['productoID']) ?>">
+                            Stock / Vence
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </section>
+
+    <section id="panelCategoriasInventario" class="inventario-panel oculto">
+        <form id="formCategoriaInventario" class="categoria-form">
+            <div class="campo">
+                <label>Nueva categoria</label>
+                <input type="text" name="nombre" autocomplete="off" maxlength="80" required placeholder="Nombre de categoria">
+            </div>
+            <button type="submit">Guardar categoria</button>
+        </form>
+
+        <div id="mensajeCategoriaInventario" class="mensaje-inventario nuevo">
+            Crea categorias para ordenar los productos del inventario.
+        </div>
+
+        <h3>Categorias</h3>
+        <table class="tabla-ventas tabla-categorias">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Categoria</th>
+                    <th>Productos</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($categoriasGestion as $cat): ?>
+                <tr>
+                    <td><?= intval($cat['categoriaID']) ?></td>
+                    <td><?= htmlspecialchars($cat['nombre']) ?></td>
+                    <td><?= intval($cat['total_productos']) ?></td>
+                    <td>
+                        <button type="button"
+                                class="btn-eliminar-categoria"
+                                data-categoria-id="<?= intval($cat['categoriaID']) ?>"
+                                data-categoria-nombre="<?= htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8') ?>"
+                                <?= intval($cat['total_productos']) > 0 ? 'disabled title="No se puede eliminar si tiene productos"' : '' ?>>
+                            Eliminar
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </section>
 </div>
 
 <script src="../assets/js/inventarios.js?v=<?= filemtime(__DIR__ . '/../assets/js/inventarios.js') ?>"></script>
