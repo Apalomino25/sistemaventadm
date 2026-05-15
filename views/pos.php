@@ -106,6 +106,7 @@
                     <th>Producto</th>
                     <th>Descripcion</th>
                     <th>Stock</th>
+                    <th>Vencimiento</th>
                     <th>Cantidad</th>
                     <th>Precio Venta</th>
                     <th>Subtotal</th>
@@ -175,16 +176,18 @@
                 </select>
             </div>
 
-            <div class="campoItem">
-                <label class="txt-campos">PAGO S/.</label>
-                <input type="text" inputmode="numeric"  placeholder="Paga el cliente..." id="pago">
-                <div id="msmPago"></div>
-            </div>
+            <div class="campo-pago-vuelto">
+                <div class="campoItem">
+                    <label class="txt-campos">PAGO S/.</label>
+                    <input type="text" inputmode="numeric"  placeholder="Paga el cliente..." id="pago">
+                    <div id="msmPago"></div>
+                </div>
 
-             <div class="campoItem">
-                <label class="txt-campos">VUELTO S/.</label>
-                <input type="text"  readonly id="vuelto" placeholder="vuelto al cliente">
-                <div id="mensaje"></div>
+                <div class="campoItem">
+                    <label class="txt-campos">VUELTO S/.</label>
+                    <input type="text"  readonly id="vuelto" placeholder="vuelto al cliente">
+                    <div id="mensaje"></div>
+                </div>
             </div>
 
             <div class="cont-btn">
