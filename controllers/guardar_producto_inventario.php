@@ -44,17 +44,17 @@ if($codigo === '' || $stock < 0){
     responderInventario(['ok' => false, 'error' => 'Ingrese codigo y stock valido.']);
 }
 
+if($fechaVencimiento === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaVencimiento)){
+    responderInventario(['ok' => false, 'error' => 'Fecha de vencimiento invalida.']);
+}
+
 if($modo !== 'actualizar_stock'){
     if($stock <= 0){
         responderInventario(['ok' => false, 'error' => 'Ingrese stock inicial mayor a cero.']);
     }
 
-    if($nombre === '' || $categoriaID <= 0 || $precioCompra <= 0 || $precioVenta <= 0 || $fechaVencimiento === ''){
+    if($nombre === '' || $categoriaID <= 0 || $precioCompra <= 0 || $precioVenta <= 0){
         responderInventario(['ok' => false, 'error' => 'Complete los campos obligatorios.']);
-    }
-
-    if(!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaVencimiento)){
-        responderInventario(['ok' => false, 'error' => 'Fecha de vencimiento invalida.']);
     }
 }
 
@@ -78,14 +78,15 @@ try {
         $stmtUpdate = $conn->prepare("
             UPDATE productos
             SET stock = ?,
+                fechaVencimiento = ?,
                 estado = 1
             WHERE productoID = ?
         ");
-        $stmtUpdate->execute([$stock, $productoExistente['productoID']]);
+        $stmtUpdate->execute([$stock, $fechaVencimiento, $productoExistente['productoID']]);
 
         responderInventario([
             'ok' => true,
-            'message' => 'Stock actualizado. ' . $productoExistente['nombre'] . ' ahora tiene ' . $stock . ' unidades.',
+            'message' => 'Stock y vencimiento actualizados. ' . $productoExistente['nombre'] . ' ahora tiene ' . $stock . ' unidades.',
             'productoID' => (int)$productoExistente['productoID']
         ]);
     }
