@@ -1,5 +1,6 @@
-let inventarioBusquedaTimer = null;
-let inventarioBusquedaSecuencia = 0;
+var inventarioBusquedaTimer = null;
+var inventarioBusquedaSecuencia = 0;
+window.inventariosEventosRegistrados = window.inventariosEventosRegistrados || false;
 
 function urlInventarioBusqueda(params){
     const query = new URLSearchParams(params).toString();
@@ -27,6 +28,41 @@ function mostrarMensajeInventario(texto, clase = "nuevo"){
 
 function obtenerFormInventario(){
     return document.getElementById("formInventario");
+}
+
+function recargarInventarios(panel = "productos"){
+    sessionStorage.setItem("inventarioPanelActivo", panel);
+    if(typeof cargarPagina === "function"){
+        cargarPagina("inventarios.php");
+    } else {
+        location.reload();
+    }
+}
+
+function mostrarMensajeCategoria(texto, clase = "nuevo"){
+    const mensaje = document.getElementById("mensajeCategoriaInventario");
+    if(mensaje){
+        mensaje.className = `mensaje-inventario ${clase}`;
+        mensaje.textContent = texto;
+    }
+}
+
+function activarPanelInventario(panel){
+    const esCategorias = panel === "categorias";
+    sessionStorage.setItem("inventarioPanelActivo", esCategorias ? "categorias" : "productos");
+
+    document.querySelectorAll(".inventario-tab").forEach(btn => {
+        btn.classList.toggle("activo", btn.dataset.inventarioPanel === panel);
+    });
+
+    document.getElementById("panelProductosInventario")?.classList.toggle("oculto", esCategorias);
+    document.getElementById("panelProductosInventario")?.classList.toggle("activo", !esCategorias);
+    document.getElementById("panelCategoriasInventario")?.classList.toggle("oculto", !esCategorias);
+    document.getElementById("panelCategoriasInventario")?.classList.toggle("activo", esCategorias);
+
+    if(esCategorias){
+        alternarAlertasInventario(false);
+    }
 }
 
 function setCamposCrearVisibles(visible){
@@ -57,6 +93,17 @@ function ocultarResultadosInventario(){
     if(!contenedor) return;
     contenedor.innerHTML = "";
     contenedor.classList.add("oculto");
+}
+
+function alternarAlertasInventario(forzarVisible = null){
+    const panel = document.getElementById("panelAlertasInventario");
+    const boton = document.getElementById("btnAlertasInventario");
+    if(!panel || !boton) return;
+
+    const visible = forzarVisible === null ? panel.classList.contains("oculto") : Boolean(forzarVisible);
+    panel.classList.toggle("oculto", !visible);
+    boton.classList.toggle("activo", visible);
+    boton.setAttribute("aria-expanded", visible ? "true" : "false");
 }
 
 function mostrarResultadosInventario(productos){
@@ -94,7 +141,7 @@ function mostrarResultadosInventario(productos){
 }
 
 function limpiarCamposCrear(form){
-    ["nombre", "descripcion", "categoriaID", "precioCompra", "precioVenta", "fechaVencimiento"].forEach(nombre => {
+    ["nombre", "descripcion", "categoriaID", "precioCompra", "precioVenta"].forEach(nombre => {
         const campo = form.elements[nombre];
         if(campo){
             campo.value = "";
@@ -114,6 +161,7 @@ function cargarProductoExistente(producto){
     form.elements.modo.value = "actualizar_stock";
     form.elements.codigo.value = producto.codigo || "";
     form.elements.stock.value = "";
+    form.elements.fechaVencimiento.value = producto.fechaVencimiento || "";
 
     const ficha = document.getElementById("productoEncontrado");
     const nombre = document.getElementById("productoEncontradoNombre");
@@ -134,12 +182,12 @@ function cargarProductoExistente(producto){
 
     const btn = form.querySelector("button[type='submit']");
     if(btn){
-        btn.textContent = "Actualizar stock";
+        btn.textContent = "Actualizar stock y vencimiento";
     }
 
     form.elements.stock.value = producto.stock || 0;
     form.elements.stock.focus();
-    mostrarMensajeInventario("Producto encontrado. Edita el stock y guarda los cambios.", "existente");
+    mostrarMensajeInventario("Producto encontrado. Edita el stock o la fecha de vencimiento y guarda los cambios.", "existente");
 }
 
 function prepararProductoNuevo(codigo){
@@ -154,6 +202,7 @@ function prepararProductoNuevo(codigo){
     form.elements.modo.value = "crear";
     form.elements.codigo.value = codigo;
     form.elements.stock.value = "";
+    form.elements.fechaVencimiento.value = "";
 
     const ficha = document.getElementById("productoEncontrado");
     if(ficha) ficha.classList.add("oculto");
@@ -230,6 +279,10 @@ function buscarCodigoInventario(){
         });
 }
 
+function registrarEventosInventario(){
+if(window.inventariosEventosRegistrados) return;
+window.inventariosEventosRegistrados = true;
+
 document.addEventListener("input", function(e){
     if(e.target.id !== "codigoBusquedaInventario") return;
 
@@ -254,8 +307,31 @@ document.addEventListener("keydown", function(e){
 });
 
 document.addEventListener("click", function(e){
+    const tab = e.target.closest(".inventario-tab");
+    if(tab){
+        activarPanelInventario(tab.dataset.inventarioPanel || "productos");
+        return;
+    }
+
+    if(e.target.closest("#btnAlertasInventario")){
+        activarPanelInventario("productos");
+        alternarAlertasInventario();
+        return;
+    }
+
+    if(e.target.closest("#btnCerrarAlertasInventario")){
+        alternarAlertasInventario(false);
+        return;
+    }
+
     if(e.target.id === "btnBuscarInventario"){
         buscarCodigoInventario();
+        return;
+    }
+
+    const btnEliminarCategoria = e.target.closest(".btn-eliminar-categoria");
+    if(btnEliminarCategoria){
+        eliminarCategoriaInventario(btnEliminarCategoria);
         return;
     }
 
@@ -286,6 +362,13 @@ document.addEventListener("reset", function(e){
 });
 
 document.addEventListener("submit", function(e){
+    const formCategoria = e.target.closest("#formCategoriaInventario");
+    if(formCategoria){
+        e.preventDefault();
+        guardarCategoriaInventario(formCategoria);
+        return;
+    }
+
     const form = e.target.closest("#formInventario");
     if(!form) return;
 
@@ -298,7 +381,7 @@ document.addEventListener("submit", function(e){
 
     if(btn){
         btn.disabled = true;
-            btn.textContent = data.modo === "actualizar_stock" ? "Actualizando..." : "Guardando...";
+        btn.textContent = data.modo === "actualizar_stock" ? "Actualizando..." : "Guardando...";
     }
 
     fetch("../controllers/guardar_producto_inventario.php", {
@@ -310,11 +393,7 @@ document.addEventListener("submit", function(e){
     .then(json => {
         if(json.ok){
             alert(json.message || "Inventario actualizado");
-            if(typeof cargarPagina === "function"){
-                cargarPagina("inventarios.php");
-            } else {
-                location.reload();
-            }
+            recargarInventarios();
             return;
         }
 
@@ -324,12 +403,94 @@ document.addEventListener("submit", function(e){
     .finally(() => {
         if(btn){
             btn.disabled = false;
-            btn.textContent = data.modo === "actualizar_stock" ? "Actualizar stock" : "Guardar producto";
+            btn.textContent = data.modo === "actualizar_stock" ? "Actualizar stock y vencimiento" : "Guardar producto";
         }
     });
 });
+}
 
-document.addEventListener("DOMContentLoaded", function(){
+function inicializarInventarios(){
     setCamposCrearVisibles(false);
     ocultarFormularioInventario();
-});
+    activarPanelInventario(sessionStorage.getItem("inventarioPanelActivo") || "productos");
+}
+
+window.inicializarInventarios = inicializarInventarios;
+registrarEventosInventario();
+
+if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", inicializarInventarios);
+} else {
+    inicializarInventarios();
+}
+
+function guardarCategoriaInventario(form){
+    const btn = form.querySelector("button[type='submit']");
+    const nombre = String(form.elements.nombre.value || "").trim();
+
+    if(!nombre){
+        mostrarMensajeCategoria("Ingrese el nombre de la categoria.", "nuevo");
+        form.elements.nombre.focus();
+        return;
+    }
+
+    if(btn){
+        btn.disabled = true;
+        btn.textContent = "Guardando...";
+    }
+
+    fetch("../controllers/guardar_categoria_inventario.php", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({accion: "crear", nombre})
+    })
+    .then(res => res.json())
+    .then(json => {
+        if(json.ok){
+            alert(json.message || "Categoria guardada");
+            recargarInventarios("categorias");
+            return;
+        }
+
+        mostrarMensajeCategoria(json.error || "No se pudo guardar la categoria.", "existente");
+    })
+    .catch(err => mostrarMensajeCategoria("Error de servidor: " + err, "existente"))
+    .finally(() => {
+        if(btn){
+            btn.disabled = false;
+            btn.textContent = "Guardar categoria";
+        }
+    });
+}
+
+function eliminarCategoriaInventario(btn){
+    const categoriaID = parseInt(btn.dataset.categoriaId) || 0;
+    const nombre = btn.dataset.categoriaNombre || "esta categoria";
+
+    if(categoriaID <= 0) return;
+    if(!confirm(`Eliminar categoria "${nombre}"?`)) return;
+
+    btn.disabled = true;
+    btn.textContent = "Eliminando...";
+
+    fetch("../controllers/guardar_categoria_inventario.php", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({accion: "eliminar", categoriaID})
+    })
+    .then(res => res.json())
+    .then(json => {
+        if(json.ok){
+            alert(json.message || "Categoria eliminada");
+            recargarInventarios("categorias");
+            return;
+        }
+
+        alert("Error: " + json.error);
+    })
+    .catch(err => alert("Error de servidor: " + err))
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = "Eliminar";
+    });
+}
