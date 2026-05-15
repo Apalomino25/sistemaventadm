@@ -22,6 +22,36 @@ function tablaExiste(PDO $conn, string $tabla): bool {
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function indiceExiste(PDO $conn, string $tabla, string $indice): bool {
+    $stmt = $conn->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND INDEX_NAME = ?
+    ");
+    $stmt->execute([$tabla, $indice]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function eliminarIndiceUnicoFechaCierres(PDO $conn): void {
+    $stmt = $conn->prepare("
+        SELECT INDEX_NAME
+        FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'cierres'
+          AND NON_UNIQUE = 0
+          AND INDEX_NAME <> 'PRIMARY'
+        GROUP BY INDEX_NAME
+        HAVING GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) = 'fecha'
+    ");
+    $stmt->execute();
+
+    foreach($stmt->fetchAll(PDO::FETCH_COLUMN) as $indice){
+        $conn->exec("ALTER TABLE cierres DROP INDEX `$indice`");
+    }
+}
+
 function asegurarColumna(PDO $conn, string $tabla, string $columna, string $definicion): void {
     if(!columnaExiste($conn, $tabla, $columna)){
         $conn->exec("ALTER TABLE `$tabla` ADD COLUMN `$columna` $definicion");
@@ -30,11 +60,47 @@ function asegurarColumna(PDO $conn, string $tabla, string $columna, string $defi
 
 function asegurarColumnasPagos(PDO $conn): void {
     asegurarColumna($conn, 'ventas', 'fechaPago', 'DATETIME NULL AFTER estadoPago');
-    asegurarColumna($conn, 'cierres', 'total_pendientes_cobrados', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pendiente');
     asegurarColumna($conn, 'detalleventa', 'estadoPago', "VARCHAR(20) NOT NULL DEFAULT 'pagado' AFTER subtotal");
     asegurarColumna($conn, 'detalleventa', 'montoPagado', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER estadoPago');
     asegurarColumna($conn, 'detalleventa', 'saldoPendiente', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER montoPagado');
     asegurarColumna($conn, 'detalleventa', 'fechaPago', 'DATETIME NULL AFTER saldoPendiente');
+
+    if(tablaExiste($conn, 'cierres')){
+        eliminarIndiceUnicoFechaCierres($conn);
+        asegurarColumna($conn, 'cierres', 'tipopago', "VARCHAR(50) NULL AFTER fecha");
+        asegurarColumna($conn, 'cierres', 'total_ventas', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER tipopago');
+        asegurarColumna($conn, 'cierres', 'total_pagado', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_ventas');
+        asegurarColumna($conn, 'cierres', 'total_pendiente', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pagado');
+        asegurarColumna($conn, 'cierres', 'total_pendientes_cobrados', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pendiente');
+        asegurarColumna($conn, 'cierres', 'total_recibido', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_pendientes_cobrados');
+        asegurarColumna($conn, 'cierres', 'total_vuelto', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_recibido');
+        asegurarColumna($conn, 'cierres', 'total_compra', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_vuelto');
+        asegurarColumna($conn, 'cierres', 'total_ganancia', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_compra');
+        asegurarColumna($conn, 'cierres', 'fisico', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total_ganancia');
+        asegurarColumna($conn, 'cierres', 'diferencia', 'DECIMAL(10,2) GENERATED ALWAYS AS (fisico - total_recibido) STORED AFTER fisico');
+        asegurarColumna($conn, 'cierres', 'observacion', 'VARCHAR(255) NULL AFTER diferencia');
+        asegurarColumna($conn, 'cierres', 'usuarioID', 'INT NULL AFTER observacion');
+        asegurarColumna($conn, 'cierres', 'usuario_cierre', 'INT NULL AFTER usuarioID');
+        asegurarColumna($conn, 'cierres', 'creado_en', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER usuario_cierre');
+        asegurarColumna($conn, 'cierres', 'estado', 'INT NOT NULL DEFAULT 1 AFTER creado_en');
+
+        $conn->exec("
+            UPDATE cierres
+            SET usuario_cierre = usuarioID
+            WHERE usuario_cierre IS NULL
+              AND usuarioID IS NOT NULL
+        ");
+
+        if(!indiceExiste($conn, 'cierres', 'idx_cierres_fecha')){
+            $conn->exec("ALTER TABLE cierres ADD INDEX idx_cierres_fecha (fecha)");
+        }
+        if(!indiceExiste($conn, 'cierres', 'idx_cierres_usuarioID')){
+            $conn->exec("ALTER TABLE cierres ADD INDEX idx_cierres_usuarioID (usuarioID)");
+        }
+        if(!indiceExiste($conn, 'cierres', 'idx_cierres_usuario_cierre')){
+            $conn->exec("ALTER TABLE cierres ADD INDEX idx_cierres_usuario_cierre (usuario_cierre)");
+        }
+    }
 
     if(!tablaExiste($conn, 'venta_pagos')){
         $conn->exec("
