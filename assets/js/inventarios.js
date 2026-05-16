@@ -162,6 +162,7 @@ function cargarProductoExistente(producto){
     form.elements.codigo.value = producto.codigo || "";
     form.elements.stock.value = "";
     form.elements.fechaVencimiento.value = producto.fechaVencimiento || "";
+    form.elements.precioVenta.value = Number(producto.precioVenta || 0).toFixed(2);
 
     const ficha = document.getElementById("productoEncontrado");
     const nombre = document.getElementById("productoEncontradoNombre");
@@ -182,12 +183,12 @@ function cargarProductoExistente(producto){
 
     const btn = form.querySelector("button[type='submit']");
     if(btn){
-        btn.textContent = "Actualizar stock y vencimiento";
+        btn.textContent = "Actualizar stock, vencimiento y precio";
     }
 
     form.elements.stock.value = producto.stock || 0;
     form.elements.stock.focus();
-    mostrarMensajeInventario("Producto encontrado. Edita el stock o la fecha de vencimiento y guarda los cambios.", "existente");
+    mostrarMensajeInventario("Producto encontrado. Edita el stock, la fecha de vencimiento o el precio de venta y guarda los cambios.", "existente");
 }
 
 function prepararProductoNuevo(codigo){
@@ -403,7 +404,7 @@ document.addEventListener("submit", function(e){
     .finally(() => {
         if(btn){
             btn.disabled = false;
-            btn.textContent = data.modo === "actualizar_stock" ? "Actualizar stock y vencimiento" : "Guardar producto";
+            btn.textContent = data.modo === "actualizar_stock" ? "Actualizar stock, vencimiento y precio" : "Guardar producto";
         }
     });
 });
