@@ -179,7 +179,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
             <input type="number" name="precioCompra" min="0.01" step="0.01" required>
         </div>
 
-        <div class="campo campo-crear">
+        <div class="campo">
             <label>Precio venta</label>
             <input type="number" name="precioVenta" min="0.01" step="0.01" required>
         </div>
@@ -273,7 +273,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
                         <button type="button"
                                 class="btn-editar-stock"
                                 data-producto-id="<?= intval($p['productoID']) ?>">
-                            Stock / Vence
+                            Stock / Vence / Precio
                         </button>
                     </td>
                 </tr>
