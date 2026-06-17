@@ -9,6 +9,13 @@ $fechaHasta = $_GET['fecha_hasta'] ?? date('Y-m-d');
 $estadoPagoFiltro = $_GET['estadoPago'] ?? '';
 $tipoPagoFiltro = $_GET['tipoPago'] ?? '';
 $estadoFiltro = $_GET['estado'] ?? '';
+$clienteFiltro = (int)($_GET['clienteID'] ?? 0);
+
+$clientes = $conn->query("
+    SELECT clienteID, nombre, numeroDocumento
+    FROM clientes
+    ORDER BY nombre ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
 $where = ["DATE(v.fecha) BETWEEN :fechaDesde AND :fechaHasta"];
 $params = [
@@ -39,6 +46,11 @@ if(in_array($tipoPagoFiltro, ['efectivo', 'yape', 'plin', 'transferencia'], true
 if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
     $where[] = "v.estado = :estado";
     $params[':estado'] = (int)$estadoFiltro;
+}
+
+if($clienteFiltro > 0){
+    $where[] = "v.clienteID = :clienteID";
+    $params[':clienteID'] = $clienteFiltro;
 }
 
 $sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,
@@ -120,6 +132,17 @@ $resultado = $stmt;
                 <option value="">Todos</option>
                 <option value="1" <?= $estadoFiltro === '1' ? 'selected' : '' ?>>Activo</option>
                 <option value="0" <?= $estadoFiltro === '0' ? 'selected' : '' ?>>Anulado</option>
+            </select>
+        </label>
+        <label>
+            Cliente
+            <select name="clienteID">
+                <option value="0">Todos</option>
+                <?php foreach($clientes as $cliente): ?>
+                    <option value="<?= intval($cliente['clienteID']) ?>" <?= $clienteFiltro === intval($cliente['clienteID']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($cliente['nombre'] . ($cliente['numeroDocumento'] ? ' - ' . $cliente['numeroDocumento'] : '')) ?>
+                    </option>
+                <?php endforeach; ?>
             </select>
         </label>
         <button type="submit">Filtrar</button>

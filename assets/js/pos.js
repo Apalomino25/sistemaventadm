@@ -183,6 +183,7 @@ function buscarProducto(busqueda){
 }
 
 function buscarProductosEnVivo(busqueda){
+    
     const secuenciaActual = ++busquedaSecuencia;
 
     fetch("../controllers/buscar_producto.php?codigo=" + encodeURIComponent(busqueda))

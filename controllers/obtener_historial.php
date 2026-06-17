@@ -9,6 +9,7 @@ $fechaHasta = $_GET['fecha_hasta'] ?? '';
 $estadoPagoFiltro = $_GET['estadoPago'] ?? '';
 $tipoPagoFiltro = $_GET['tipoPago'] ?? '';
 $estadoFiltro = $_GET['estado'] ?? '';
+$clienteFiltro = (int)($_GET['clienteID'] ?? 0);
 
 $where = [];
 $params = [];
@@ -42,6 +43,11 @@ if(in_array($tipoPagoFiltro, ['efectivo', 'yape', 'plin', 'transferencia'], true
 if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
     $where[] = "v.estado = :estado";
     $params[':estado'] = (int)$estadoFiltro;
+}
+
+if($clienteFiltro > 0){
+    $where[] = "v.clienteID = :clienteID";
+    $params[':clienteID'] = $clienteFiltro;
 }
 
 $sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,

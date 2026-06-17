@@ -21,11 +21,26 @@ document.getElementById("login-box").addEventListener("submit", function(e){
         try {
             const data = JSON.parse(text);
 
+            const mensaje = document.getElementById("errorLogin");
+
+
             if (data.status === "ok") {
-                window.location = "../views/home.php";
+                
+                mensaje.classList.remove("error");
+                mensaje.classList.add("ok")
+                mensaje.innerText = "Bienvenido, redirigiendo ...";
+                
+                setTimeout(function() {
+                window.location.href = "../views/home.php";
+                }, 2000);
+                
             } else {
-                document.getElementById("errorLogin").innerText =
-                    data.mensaje || "Usuario o contraseña incorrectos";
+                mensaje.classList.remove("ok");
+                mensaje.classList.add("error");
+                mensaje.innerText = data.mensaje || "Usuario o contraseña incorrectos";
+                setTimeout(() => {
+                    mensaje.innerText = ""
+                }, 2000);
             }
 
         } catch (e) {

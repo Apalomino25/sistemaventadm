@@ -117,5 +117,18 @@ background:#f20593;
 /* error login */
 
 #errorLogin {
+    font-size: 14px;
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+#errorLogin.ok {
+    color: green;
+    background-color: #e5ffe5;
+}
+
+#errorLogin.error {
     color: red;
+    background-color: #ffe5e5;
 }
