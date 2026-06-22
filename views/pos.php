@@ -22,6 +22,16 @@
     die("Error de conexión: " . $e->getMessage());
     }
 
+    $clienteDocumento = trim(((string)($cliente['tipoDocumento'] ?? '')) . ' ' . ((string)($cliente['numeroDocumento'] ?? '')));
+    $clienteMetaPartes = array_filter([
+        $clienteDocumento,
+        !empty($cliente['telefono']) ? 'Tel. ' . $cliente['telefono'] : ''
+    ]);
+    $clienteMeta = implode(' | ', $clienteMetaPartes);
+    if($clienteMeta === ''){
+        $clienteMeta = 'Cliente seleccionado';
+    }
+
    ?>
 
     <!DOCTYPE html>
@@ -41,18 +51,53 @@
 
         <div class="datosVenta">
 
-            <div class="datosVentaItem">
-                <label>Cliente</label>
-                <div class="cliente-campo">
-                    <input type="text" id="clienteNombre" value="<?php echo htmlspecialchars($cliente['nombre']);?>" autocomplete="off">
-                    <input type="hidden" id="clienteID" value="<?php echo intval($cliente['clienteID']); ?>">
-                    <button type="button" id="btnClienteGeneral" title="Usar cliente general">General</button>
-                    <button type="button" id="btnNuevoCliente" title="Agregar cliente">+</button>
-                    <div id="resultadosClientes" class="resultados-clientes"></div>
+            <div class="datosVentaItem datosVentaItem-cliente">
+                <label for="clienteNombre">Cliente</label>
+                <div class="cliente-selector" id="clienteSelector">
+                    <div class="cliente-campo">
+                        <div class="cliente-buscador">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                            <input type="text" id="clienteNombre" value="<?php echo htmlspecialchars($cliente['nombre']);?>" autocomplete="off" placeholder="Buscar por nombre, DNI, RUC o telefono">
+                            <button type="button" id="btnLimpiarCliente" class="cliente-icono" title="Limpiar cliente" aria-label="Limpiar cliente">
+                                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <input
+                            type="hidden"
+                            id="clienteID"
+                            value="<?php echo intval($cliente['clienteID']); ?>"
+                            data-nombre="<?php echo htmlspecialchars($cliente['nombre'] ?? ''); ?>"
+                            data-tipo-documento="<?php echo htmlspecialchars($cliente['tipoDocumento'] ?? ''); ?>"
+                            data-numero-documento="<?php echo htmlspecialchars($cliente['numeroDocumento'] ?? ''); ?>"
+                            data-telefono="<?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?>"
+                            data-direccion="<?php echo htmlspecialchars($cliente['direccion'] ?? ''); ?>"
+                        >
+                        <button type="button" id="btnClienteGeneral" class="cliente-accion" title="Usar cliente general" aria-label="Usar cliente general">
+                            <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                            <span>General</span>
+                        </button>
+                        <button type="button" id="btnNuevoCliente" class="cliente-accion cliente-accion-secundaria" title="Agregar cliente" aria-label="Agregar cliente">
+                            <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+                            <span>Nuevo</span>
+                        </button>
+                        <div id="resultadosClientes" class="resultados-clientes"></div>
+                    </div>
+                    <div id="clienteSeleccionado" class="cliente-seleccionado">
+                        <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+                        <div>
+                            <strong id="clienteSeleccionadoNombre"><?php echo htmlspecialchars($cliente['nombre']);?></strong>
+                            <span id="clienteSeleccionadoMeta"><?php echo htmlspecialchars($clienteMeta); ?></span>
+                        </div>
+                        <button type="button" id="btnEditarCliente" class="cliente-editar" title="Editar cliente" aria-label="Editar cliente">
+                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                            <span>Editar</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <form id="formNuevoCliente" class="form-nuevo-cliente oculto">
+                <input type="hidden" name="clienteID" value="">
                 <input type="text" name="nombre" placeholder="Nombre cliente" required>
                 <select name="tipoDocumento">
                     <option value="DNI">DNI</option>

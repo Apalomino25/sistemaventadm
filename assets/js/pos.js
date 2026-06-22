@@ -5,6 +5,8 @@ const MIN_CARACTERES_BUSQUEDA = 2;
 let busquedaTimer = null;
 let busquedaSecuencia = 0;
 let clienteTimer = null;
+let clienteSecuencia = 0;
+let clienteResultadoActivo = -1;
 let historialClienteTimer = null;
 let clienteGeneral = null;
 
@@ -350,28 +352,67 @@ function iniciarClientePOS(){
     const idInput = document.getElementById("clienteID");
     const btnGeneral = document.getElementById("btnClienteGeneral");
     const btnNuevo = document.getElementById("btnNuevoCliente");
+    const btnLimpiar = document.getElementById("btnLimpiarCliente");
+    const btnEditar = document.getElementById("btnEditarCliente");
     const formNuevo = document.getElementById("formNuevoCliente");
     const btnCancelar = document.getElementById("btnCancelarCliente");
 
     if(!input || !idInput || input.dataset.iniciado === "1") return;
     input.dataset.iniciado = "1";
-    clienteGeneral = {
-        clienteID: idInput.value,
-        nombre: input.value
-    };
+
+    clienteGeneral = leerClienteSeleccionado(input, idInput);
+    actualizarResumenCliente(clienteGeneral);
+
+    input.addEventListener("focus", () => {
+        input.select();
+        buscarClientes("", true);
+    });
 
     input.addEventListener("input", () => {
-        idInput.value = "";
         clearTimeout(clienteTimer);
+        limpiarDatosClienteOculto(idInput);
+        actualizarResumenCliente(null);
+
         const q = input.value.trim();
-        if(q.length < 2){
-            ocultarResultadosClientes();
+        if(q === ""){
+            buscarClientes("", true);
             return;
         }
-        clienteTimer = setTimeout(() => buscarClientes(q), 250);
+
+        if(q.length < 2){
+            mostrarEstadoClientes("Escribe al menos 2 caracteres", "Puedes buscar por nombre, documento o telefono.");
+            return;
+        }
+
+        clienteTimer = setTimeout(() => buscarClientes(q, true), 250);
     });
 
     input.addEventListener("keydown", e => {
+        const contenedor = document.getElementById("resultadosClientes");
+        const panelActivo = contenedor && contenedor.classList.contains("activo");
+
+        if(panelActivo && (e.key === "ArrowDown" || e.key === "ArrowUp")){
+            e.preventDefault();
+            const paso = e.key === "ArrowDown" ? 1 : -1;
+            moverClienteActivo(paso);
+            return;
+        }
+
+        if(e.key === "Enter"){
+            const activo = contenedor ? contenedor.querySelector(".resultado-cliente.activo") : null;
+            if(activo){
+                e.preventDefault();
+                activo.click();
+                return;
+            }
+
+            const q = input.value.trim();
+            if(q.length >= 2){
+                e.preventDefault();
+                buscarClientes(q, true);
+            }
+        }
+
         if(e.key === "Escape"){
             ocultarResultadosClientes();
         }
@@ -383,21 +424,180 @@ function iniciarClientePOS(){
 
     if(btnNuevo && formNuevo){
         btnNuevo.addEventListener("click", () => {
-            formNuevo.classList.toggle("oculto");
-            const nombre = formNuevo.querySelector("[name='nombre']");
-            if(nombre){
-                nombre.value = input.value.trim() && !idInput.value ? input.value.trim() : "";
-                nombre.focus();
+            const nombreInicial = input.value.trim() && !idInput.value ? input.value.trim() : "";
+            abrirFormularioNuevoCliente(nombreInicial, true);
+        });
+    }
+
+    if(btnLimpiar){
+        btnLimpiar.addEventListener("click", () => {
+            input.value = "";
+            limpiarDatosClienteOculto(idInput);
+            actualizarResumenCliente(null);
+            buscarClientes("", true);
+            input.focus();
+        });
+    }
+
+    if(btnEditar){
+        btnEditar.addEventListener("click", () => {
+            const cliente = leerClienteSeleccionado(input, idInput);
+            if(!cliente.clienteID){
+                input.focus();
+                buscarClientes("", true);
+                return;
             }
+
+            abrirFormularioEditarCliente(cliente);
         });
     }
 
     if(btnCancelar && formNuevo){
         btnCancelar.addEventListener("click", () => {
-            formNuevo.reset();
-            formNuevo.classList.add("oculto");
+            cerrarFormularioCliente();
+            input.focus();
         });
     }
+
+    if(!window.posClienteDocumentListener){
+        document.addEventListener("click", e => {
+            if(!e.target.closest(".cliente-selector") && !e.target.closest("#formNuevoCliente")){
+                ocultarResultadosClientes();
+            }
+        });
+        window.posClienteDocumentListener = true;
+    }
+}
+
+function leerClienteSeleccionado(input, idInput){
+    return {
+        clienteID: idInput.value || "",
+        nombre: idInput.dataset.nombre || input.value || "",
+        tipoDocumento: idInput.dataset.tipoDocumento || "",
+        numeroDocumento: idInput.dataset.numeroDocumento || "",
+        telefono: idInput.dataset.telefono || "",
+        direccion: idInput.dataset.direccion || ""
+    };
+}
+
+function guardarDatosClienteOculto(idInput, cliente){
+    idInput.value = cliente.clienteID || "";
+    idInput.dataset.nombre = cliente.nombre || "";
+    idInput.dataset.tipoDocumento = cliente.tipoDocumento || "";
+    idInput.dataset.numeroDocumento = cliente.numeroDocumento || "";
+    idInput.dataset.telefono = cliente.telefono || "";
+    idInput.dataset.direccion = cliente.direccion || "";
+}
+
+function limpiarDatosClienteOculto(idInput){
+    guardarDatosClienteOculto(idInput, {});
+}
+
+function textoMetaCliente(cliente){
+    if(!cliente) return "";
+
+    const documento = `${cliente.tipoDocumento || ""} ${cliente.numeroDocumento || ""}`.trim();
+    const partes = [];
+
+    if(documento){
+        partes.push(documento);
+    }
+
+    if(cliente.telefono){
+        partes.push("Tel. " + cliente.telefono);
+    }
+
+    if(cliente.direccion){
+        partes.push(cliente.direccion);
+    }
+
+    return partes.join(" | ") || "Sin documento registrado";
+}
+
+function actualizarResumenCliente(cliente){
+    const resumen = document.getElementById("clienteSeleccionado");
+    const nombre = document.getElementById("clienteSeleccionadoNombre");
+    const meta = document.getElementById("clienteSeleccionadoMeta");
+    const btnEditar = document.getElementById("btnEditarCliente");
+
+    if(!resumen || !nombre || !meta) return;
+
+    const seleccionado = cliente && cliente.clienteID;
+    resumen.classList.toggle("sin-cliente", !seleccionado);
+    nombre.textContent = seleccionado ? (cliente.nombre || "Cliente seleccionado") : "Sin cliente seleccionado";
+    meta.textContent = seleccionado ? textoMetaCliente(cliente) : "Busca por nombre, documento o telefono";
+
+    if(btnEditar){
+        btnEditar.hidden = !seleccionado;
+    }
+}
+
+function setValorFormularioCliente(form, nombre, valor){
+    const campo = form.querySelector(`[name="${nombre}"]`);
+    if(campo){
+        campo.value = valor || "";
+    }
+}
+
+function prepararFormularioCliente(form, cliente = {}, modo = "nuevo"){
+    form.dataset.modo = modo;
+
+    setValorFormularioCliente(form, "clienteID", modo === "editar" ? cliente.clienteID : "");
+    setValorFormularioCliente(form, "nombre", cliente.nombre || "");
+    setValorFormularioCliente(form, "tipoDocumento", cliente.tipoDocumento || "DNI");
+    setValorFormularioCliente(form, "numeroDocumento", cliente.numeroDocumento || "");
+    setValorFormularioCliente(form, "telefono", cliente.telefono || "");
+    setValorFormularioCliente(form, "direccion", cliente.direccion || "");
+
+    const btn = form.querySelector("button[type='submit']");
+    if(btn){
+        btn.textContent = modo === "editar" ? "Actualizar cliente" : "Guardar cliente";
+    }
+}
+
+function cerrarFormularioCliente(){
+    const formNuevo = document.getElementById("formNuevoCliente");
+    if(!formNuevo) return;
+
+    formNuevo.reset();
+    prepararFormularioCliente(formNuevo, {}, "nuevo");
+    formNuevo.classList.add("oculto");
+}
+
+function abrirFormularioNuevoCliente(nombreInicial = "", alternar = false){
+    const formNuevo = document.getElementById("formNuevoCliente");
+    if(!formNuevo) return;
+
+    const estabaVisible = !formNuevo.classList.contains("oculto");
+    if(alternar && estabaVisible){
+        formNuevo.classList.add("oculto");
+        return;
+    }
+
+    prepararFormularioCliente(formNuevo, {nombre: nombreInicial}, "nuevo");
+    formNuevo.classList.remove("oculto");
+    const nombre = formNuevo.querySelector("[name='nombre']");
+    if(nombre){
+        nombre.focus();
+    }
+
+    ocultarResultadosClientes();
+}
+
+function abrirFormularioEditarCliente(cliente){
+    const formNuevo = document.getElementById("formNuevoCliente");
+    if(!formNuevo) return;
+
+    prepararFormularioCliente(formNuevo, cliente, "editar");
+    formNuevo.classList.remove("oculto");
+
+    const nombre = formNuevo.querySelector("[name='nombre']");
+    if(nombre){
+        nombre.focus();
+        nombre.select();
+    }
+
+    ocultarResultadosClientes();
 }
 
 function seleccionarCliente(cliente){
@@ -406,8 +606,14 @@ function seleccionarCliente(cliente){
     if(!input || !idInput) return;
 
     input.value = cliente.nombre || "";
-    idInput.value = cliente.clienteID || "";
+    guardarDatosClienteOculto(idInput, cliente);
+    actualizarResumenCliente(cliente);
     ocultarResultadosClientes();
+
+    const inputCodigo = document.getElementById("codigo");
+    if(inputCodigo){
+        inputCodigo.focus();
+    }
 }
 
 function usarClienteGeneral(){
@@ -419,41 +625,197 @@ function usarClienteGeneral(){
 function ocultarResultadosClientes(){
     const contenedor = document.getElementById("resultadosClientes");
     if(!contenedor) return;
+    clienteSecuencia++;
+    clienteResultadoActivo = -1;
     contenedor.innerHTML = "";
     contenedor.classList.remove("activo");
 }
 
-function buscarClientes(q){
+function mostrarEstadoClientes(titulo, detalle = ""){
     const contenedor = document.getElementById("resultadosClientes");
     if(!contenedor) return;
 
-    fetch("../controllers/buscar_cliente.php?q=" + encodeURIComponent(q))
-    .then(res => res.json())
-    .then(data => {
-        const clientes = data.clientes || [];
-        contenedor.innerHTML = "";
+    contenedor.innerHTML = "";
+    clienteResultadoActivo = -1;
 
-        if(clientes.length === 0){
-            const div = document.createElement("div");
-            div.className = "resultado-cliente vacio";
-            div.textContent = "Sin resultados. Puedes agregarlo con +";
-            contenedor.appendChild(div);
-            contenedor.classList.add("activo");
+    const div = document.createElement("div");
+    div.className = "resultado-cliente-vacio";
+
+    const strong = document.createElement("strong");
+    strong.textContent = titulo;
+    div.appendChild(strong);
+
+    if(detalle){
+        const span = document.createElement("span");
+        span.textContent = detalle;
+        div.appendChild(span);
+    }
+
+    contenedor.appendChild(div);
+    contenedor.classList.add("activo");
+}
+
+function mostrarCargandoClientes(){
+    mostrarEstadoClientes("Buscando clientes...", "Un momento.");
+}
+
+function agregarCabeceraClientes(contenedor, texto){
+    const cabecera = document.createElement("div");
+    cabecera.className = "resultados-clientes-cabecera";
+    cabecera.textContent = texto;
+    contenedor.appendChild(cabecera);
+}
+
+function mostrarClientesVacios(q){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    const div = document.createElement("div");
+    div.className = "resultado-cliente-vacio";
+
+    const strong = document.createElement("strong");
+    strong.textContent = "Sin clientes encontrados";
+
+    const span = document.createElement("span");
+    span.textContent = "Puedes registrarlo y quedara seleccionado para la venta.";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "resultado-cliente-crear";
+    btn.innerHTML = '<i class="fa-solid fa-user-plus" aria-hidden="true"></i><span>Crear cliente</span>';
+    btn.addEventListener("click", () => abrirFormularioNuevoCliente(q, false));
+
+    div.appendChild(strong);
+    div.appendChild(span);
+    div.appendChild(btn);
+    contenedor.appendChild(div);
+    contenedor.classList.add("activo");
+}
+
+function crearResultadoCliente(cliente, index){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "resultado-cliente";
+    btn.dataset.clienteIndex = String(index);
+
+    const icono = document.createElement("span");
+    icono.className = "resultado-cliente-icono";
+    icono.innerHTML = '<i class="fa-solid fa-user" aria-hidden="true"></i>';
+
+    const datos = document.createElement("span");
+    datos.className = "resultado-cliente-datos";
+
+    const nombre = document.createElement("strong");
+    nombre.textContent = cliente.nombre || "Cliente sin nombre";
+
+    const meta = document.createElement("span");
+    meta.className = "resultado-cliente-meta";
+    meta.textContent = textoMetaCliente(cliente);
+
+    datos.appendChild(nombre);
+    datos.appendChild(meta);
+
+    if(cliente.direccion){
+        const direccion = document.createElement("span");
+        direccion.className = "resultado-cliente-direccion";
+        direccion.textContent = cliente.direccion;
+        datos.appendChild(direccion);
+    }
+
+    const accion = document.createElement("span");
+    accion.className = "resultado-cliente-accion";
+    accion.textContent = "Elegir";
+
+    btn.appendChild(icono);
+    btn.appendChild(datos);
+    btn.appendChild(accion);
+    btn.addEventListener("click", () => seleccionarCliente(cliente));
+
+    return btn;
+}
+
+function moverClienteActivo(paso){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+
+    const items = Array.from(contenedor.querySelectorAll(".resultado-cliente"));
+    if(items.length === 0) return;
+
+    if(clienteResultadoActivo < 0){
+        clienteResultadoActivo = paso > 0 ? 0 : items.length - 1;
+    } else {
+        clienteResultadoActivo = (clienteResultadoActivo + paso + items.length) % items.length;
+    }
+
+    items.forEach((item, index) => {
+        const activo = index === clienteResultadoActivo;
+        item.classList.toggle("activo", activo);
+        if(activo){
+            item.scrollIntoView({block:"nearest"});
+        }
+    });
+}
+
+function renderizarClientes(clientes, q, modo){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+    clienteResultadoActivo = -1;
+
+    if(clientes.length === 0){
+        if(q){
+            mostrarClientesVacios(q);
+        } else {
+            mostrarEstadoClientes("No hay clientes recientes", "Escribe para buscar o registra uno nuevo.");
+        }
+        return;
+    }
+
+    agregarCabeceraClientes(contenedor, modo === "recientes" ? "Clientes recientes" : "Resultados");
+
+    clientes.forEach((cliente, index) => {
+        contenedor.appendChild(crearResultadoCliente(cliente, index));
+    });
+
+    contenedor.classList.add("activo");
+}
+
+function buscarClientes(q, forzar = false){
+    const contenedor = document.getElementById("resultadosClientes");
+    if(!contenedor) return;
+
+    const termino = (q || "").trim();
+
+    if(termino.length > 0 && termino.length < 2 && !forzar){
+        mostrarEstadoClientes("Escribe al menos 2 caracteres", "Puedes buscar por nombre, documento o telefono.");
+        return;
+    }
+
+    const secuenciaActual = ++clienteSecuencia;
+    mostrarCargandoClientes();
+
+    fetch("../controllers/buscar_cliente.php?q=" + encodeURIComponent(termino))
+    .then(res => {
+        if(!res.ok){
+            throw new Error("Respuesta invalida del servidor");
+        }
+        return res.json();
+    })
+    .then(data => {
+        if(secuenciaActual !== clienteSecuencia){
             return;
         }
 
-        clientes.forEach(cliente => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "resultado-cliente";
-            btn.innerHTML = `<strong>${cliente.nombre || ""}</strong><span>${cliente.tipoDocumento || ""} ${cliente.numeroDocumento || ""} ${cliente.telefono || ""}</span>`;
-            btn.addEventListener("click", () => seleccionarCliente(cliente));
-            contenedor.appendChild(btn);
-        });
-
-        contenedor.classList.add("activo");
+        const clientes = data.clientes || [];
+        renderizarClientes(clientes, termino, data.modo || (termino ? "busqueda" : "recientes"));
     })
-    .catch(err => console.error("Error al buscar clientes:", err));
+    .catch(err => {
+        console.error("Error al buscar clientes:", err);
+        mostrarEstadoClientes("No se pudo buscar clientes", "Revisa la conexion e intenta otra vez.");
+    });
 }
 
 function ocultarResultadosClientesHistorial(){
@@ -1615,10 +1977,11 @@ document.addEventListener("submit", function(e) {
         e.preventDefault();
         const btn = formCliente.querySelector("button[type='submit']");
         const data = Object.fromEntries(new FormData(formCliente).entries());
+        const modoFormulario = formCliente.dataset.modo === "editar" ? "editar" : "nuevo";
 
         if(btn){
             btn.disabled = true;
-            btn.textContent = "Guardando...";
+            btn.textContent = modoFormulario === "editar" ? "Actualizando..." : "Guardando...";
         }
 
         fetch("../controllers/guardar_cliente.php", {
@@ -1630,8 +1993,7 @@ document.addEventListener("submit", function(e) {
         .then(json => {
             if(json.ok){
                 seleccionarCliente(json.cliente);
-                formCliente.reset();
-                formCliente.classList.add("oculto");
+                cerrarFormularioCliente();
                 alert(json.message || "Cliente guardado");
             } else {
                 alert("Error: " + json.error);
@@ -1641,7 +2003,7 @@ document.addEventListener("submit", function(e) {
         .finally(() => {
             if(btn){
                 btn.disabled = false;
-                btn.textContent = "Guardar cliente";
+                btn.textContent = formCliente.dataset.modo === "editar" ? "Actualizar cliente" : "Guardar cliente";
             }
         });
         return;
