@@ -134,21 +134,22 @@ $resultado = $stmt;
                 <option value="0" <?= $estadoFiltro === '0' ? 'selected' : '' ?>>Anulado</option>
             </select>
         </label>
-        <label>
-            Cliente
-            <select name="clienteID">
-                <option value="0">Todos</option>
-                <?php foreach($clientes as $cliente): ?>
-                    <option value="<?= intval($cliente['clienteID']) ?>" <?= $clienteFiltro === intval($cliente['clienteID']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($cliente['nombre'] . ($cliente['numeroDocumento'] ? ' - ' . $cliente['numeroDocumento'] : '')) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </label>
+
+
+         <!-- bUSQUEDA DE CLIENTE -->
+
+        <div class="autocomplete">
+            <label for="buscar_Clientes">Buscar Clientes: </label>
+            <input type="text" id="buscar_cliente" name="buscar_cliente" placeholder="Escribel el cliente" autocomplete="off">
+            <input type="hidden" id="producto_id" name="producto_id">
+            <div id="resultados_productos" class="resultados"> </div>
+        </div>
+
+
         <button type="submit">Filtrar</button>
     </form>
 
-    <table class="tabla-ventas">
+    <table class="tabla-ventas tabla-historial-ventas">
         <thead>
             <tr>
                 <th>ID</th>

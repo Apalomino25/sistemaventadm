@@ -48,19 +48,27 @@ function mostrarMensajeCategoria(texto, clase = "nuevo"){
 }
 
 function activarPanelInventario(panel){
-    const esCategorias = panel === "categorias";
-    sessionStorage.setItem("inventarioPanelActivo", esCategorias ? "categorias" : "productos");
+    const panelActivo = ["productos", "kardex", "categorias"].includes(panel) ? panel : "productos";
+    sessionStorage.setItem("inventarioPanelActivo", panelActivo);
 
     document.querySelectorAll(".inventario-tab").forEach(btn => {
-        btn.classList.toggle("activo", btn.dataset.inventarioPanel === panel);
+        btn.classList.toggle("activo", btn.dataset.inventarioPanel === panelActivo);
     });
 
-    document.getElementById("panelProductosInventario")?.classList.toggle("oculto", esCategorias);
-    document.getElementById("panelProductosInventario")?.classList.toggle("activo", !esCategorias);
-    document.getElementById("panelCategoriasInventario")?.classList.toggle("oculto", !esCategorias);
-    document.getElementById("panelCategoriasInventario")?.classList.toggle("activo", esCategorias);
+    const paneles = {
+        productos: document.getElementById("panelProductosInventario"),
+        kardex: document.getElementById("panelKardexInventario"),
+        categorias: document.getElementById("panelCategoriasInventario")
+    };
 
-    if(esCategorias){
+    Object.entries(paneles).forEach(([nombre, elemento]) => {
+        if(!elemento) return;
+        const activo = nombre === panelActivo;
+        elemento.classList.toggle("oculto", !activo);
+        elemento.classList.toggle("activo", activo);
+    });
+
+    if(panelActivo !== "productos"){
         alternarAlertasInventario(false);
     }
 }
@@ -138,6 +146,203 @@ function mostrarResultadosInventario(productos){
     });
 
     contenedor.classList.remove("oculto");
+}
+
+function mostrarMensajeKardex(texto, clase = "nuevo"){
+    const mensaje = document.getElementById("mensajeKardex");
+    if(!mensaje) return;
+
+    mensaje.className = `mensaje-inventario ${clase}`;
+    mensaje.textContent = texto;
+}
+
+function ocultarResultadosKardex(){
+    const contenedor = document.getElementById("resultadosKardexProducto");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+    contenedor.classList.add("oculto");
+}
+
+function mostrarResultadosKardex(productos){
+    const contenedor = document.getElementById("resultadosKardexProducto");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    productos.forEach(producto => {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.className = "resultado-inventario";
+
+        const nombre = document.createElement("strong");
+        nombre.textContent = producto.nombre || "";
+
+        const detalle = document.createElement("span");
+        detalle.textContent = `Codigo: ${producto.codigo || "-"} | Stock: ${producto.stock || 0} | Vence: ${producto.fechaVencimiento || "-"}`;
+
+        boton.appendChild(nombre);
+        boton.appendChild(detalle);
+        boton.addEventListener("click", () => {
+            const buscador = document.getElementById("codigoBusquedaKardex");
+            if(buscador){
+                buscador.value = producto.codigo || producto.nombre || "";
+            }
+            ocultarResultadosKardex();
+            cargarKardexProducto(producto.productoID);
+        });
+
+        contenedor.appendChild(boton);
+    });
+
+    contenedor.classList.remove("oculto");
+}
+
+function formatearFechaKardex(valor){
+    if(!valor) return "-";
+
+    const partes = String(valor).split(" ");
+    const fecha = partes[0] || "";
+    const hora = partes[1] ? partes[1].slice(0, 5) : "";
+    const f = fecha.split("-");
+    if(f.length !== 3) return valor;
+
+    return `${f[2]}-${f[1]}-${f[0]}${hora ? " " + hora : ""}`;
+}
+
+function textoConceptoKardex(valor){
+    return String(valor || "-").replace(/_/g, " ");
+}
+
+function moneyKardex(valor){
+    if(valor === null || valor === undefined || valor === "") return "-";
+    return "S/ " + (parseFloat(valor) || 0).toFixed(2);
+}
+
+function limpiarKardex(texto = "Sin producto seleccionado."){
+    document.getElementById("resumenKardex")?.classList.add("oculto");
+    const tabla = document.getElementById("tablaKardex");
+    if(tabla){
+        tabla.innerHTML = `<tr><td colspan="10">${texto}</td></tr>`;
+    }
+}
+
+function renderKardex(data){
+    const producto = data.producto || {};
+    const resumen = data.resumen || {};
+    const movimientos = Array.isArray(data.movimientos) ? data.movimientos : [];
+    const resumenEl = document.getElementById("resumenKardex");
+    if(!resumenEl) return;
+
+    resumenEl.classList.remove("oculto");
+    document.getElementById("kardexProductoNombre").textContent = producto.nombre || "-";
+    document.getElementById("kardexProductoDetalle").textContent = `Codigo: ${producto.codigo || "-"} | Categoria: ${producto.categoria || "-"} | Vence: ${producto.fechaVencimiento || "-"}`;
+    document.getElementById("kardexTotalEntradas").textContent = resumen.totalEntradas ?? 0;
+    document.getElementById("kardexTotalSalidas").textContent = resumen.totalSalidas ?? 0;
+    document.getElementById("kardexSaldo").textContent = resumen.saldoKardex ?? 0;
+    document.getElementById("kardexStockActual").textContent = resumen.stockActual ?? 0;
+
+    const tabla = document.getElementById("tablaKardex");
+    if(!tabla) return;
+
+    tabla.innerHTML = "";
+
+    if(movimientos.length === 0){
+        tabla.innerHTML = "<tr><td colspan=\"10\">Sin movimientos registrados.</td></tr>";
+        return;
+    }
+
+    movimientos.forEach(mov => {
+        const tr = document.createElement("tr");
+        const referencia = mov.referenciaTipo
+            ? `${mov.referenciaTipo}${mov.referenciaID ? " #" + mov.referenciaID : ""}`
+            : "-";
+
+        [
+            formatearFechaKardex(mov.fecha),
+            textoConceptoKardex(mov.concepto),
+            referencia,
+            mov.cantidadEntrada || 0,
+            mov.cantidadSalida || 0,
+            mov.saldoAnterior || 0,
+            mov.saldoNuevo || 0,
+            moneyKardex(mov.costoUnitario),
+            moneyKardex(mov.precioUnitario),
+            mov.observacion || "-"
+        ].forEach(valor => {
+            const td = document.createElement("td");
+            td.textContent = valor;
+            tr.appendChild(td);
+        });
+
+        tabla.appendChild(tr);
+    });
+
+    const coincide = resumen.coincideStock !== false;
+    mostrarMensajeKardex(
+        coincide
+            ? "Kardex cargado correctamente."
+            : "Kardex cargado. El saldo no coincide con el stock actual.",
+        coincide ? "existente" : "nuevo"
+    );
+}
+
+function cargarKardexProducto(productoID){
+    const id = parseInt(productoID) || 0;
+    if(id <= 0){
+        mostrarMensajeKardex("Seleccione un producto.", "nuevo");
+        return;
+    }
+
+    mostrarMensajeKardex("Cargando kardex...", "nuevo");
+
+    fetch(`../controllers/obtener_kardex_producto.php?productoID=${encodeURIComponent(id)}`)
+        .then(res => res.json())
+        .then(json => {
+            if(!json.ok){
+                throw new Error(json.error || "No se pudo cargar el kardex");
+            }
+            renderKardex(json);
+        })
+        .catch(err => {
+            limpiarKardex("No se pudo cargar el kardex.");
+            mostrarMensajeKardex("Error: " + err.message, "nuevo");
+        });
+}
+
+function buscarCodigoKardex(){
+    const buscador = document.getElementById("codigoBusquedaKardex");
+    const codigo = buscador ? buscador.value.trim() : "";
+    if(!codigo){
+        ocultarResultadosKardex();
+        limpiarKardex();
+        mostrarMensajeKardex("Selecciona un producto para ver sus entradas, salidas y saldo.", "nuevo");
+        return;
+    }
+
+    mostrarMensajeKardex("Buscando producto...", "nuevo");
+    buscarProductoInventario({codigo})
+        .then(respuesta => {
+            if(respuesta.multiple && Array.isArray(respuesta.productos)){
+                limpiarKardex("Selecciona un producto de la lista.");
+                mostrarResultadosKardex(respuesta.productos);
+                mostrarMensajeKardex("Se encontraron varios productos.", "existente");
+                return;
+            }
+
+            ocultarResultadosKardex();
+
+            if(respuesta.existe && respuesta.producto){
+                cargarKardexProducto(respuesta.producto.productoID);
+            } else {
+                limpiarKardex("Producto no encontrado.");
+                mostrarMensajeKardex("Producto no encontrado.", "nuevo");
+            }
+        })
+        .catch(err => {
+            limpiarKardex("No se pudo buscar el producto.");
+            mostrarMensajeKardex("Error al buscar producto: " + err.message, "nuevo");
+        });
 }
 
 function limpiarCamposCrear(form){
@@ -300,11 +505,25 @@ document.addEventListener("input", function(e){
     mostrarMensajeInventario("Termina de escribir y presiona Enter o Buscar.", "nuevo");
 });
 
+document.addEventListener("input", function(e){
+    if(e.target.id !== "codigoBusquedaKardex") return;
+
+    ocultarResultadosKardex();
+    limpiarKardex("Presiona Enter o Buscar para consultar el kardex.");
+    mostrarMensajeKardex("Presiona Enter o Buscar para consultar el kardex.", "nuevo");
+});
+
 document.addEventListener("keydown", function(e){
     if(e.target.id !== "codigoBusquedaInventario" || e.key !== "Enter") return;
     e.preventDefault();
     clearTimeout(inventarioBusquedaTimer);
     buscarCodigoInventario();
+});
+
+document.addEventListener("keydown", function(e){
+    if(e.target.id !== "codigoBusquedaKardex" || e.key !== "Enter") return;
+    e.preventDefault();
+    buscarCodigoKardex();
 });
 
 document.addEventListener("click", function(e){
@@ -330,9 +549,26 @@ document.addEventListener("click", function(e){
         return;
     }
 
+    if(e.target.id === "btnBuscarKardex"){
+        buscarCodigoKardex();
+        return;
+    }
+
     const btnEliminarCategoria = e.target.closest(".btn-eliminar-categoria");
     if(btnEliminarCategoria){
         eliminarCategoriaInventario(btnEliminarCategoria);
+        return;
+    }
+
+    const btnKardex = e.target.closest(".btn-ver-kardex");
+    if(btnKardex){
+        activarPanelInventario("kardex");
+        const buscador = document.getElementById("codigoBusquedaKardex");
+        const codigo = btnKardex.closest("tr")?.children[1]?.textContent.trim() || "";
+        if(buscador) buscador.value = codigo;
+        ocultarResultadosKardex();
+        cargarKardexProducto(btnKardex.dataset.productoId);
+        document.getElementById("panelKardexInventario")?.scrollIntoView({behavior: "smooth", block: "start"});
         return;
     }
 

@@ -197,6 +197,244 @@ function asegurarColumnasInventario(PDO $conn): void {
     asegurarColumna($conn, 'productos', 'fechaVencimiento', 'DATE NULL AFTER stock');
 }
 
+function asegurarTablasKardex(PDO $conn): void {
+    $conn->exec("
+        CREATE TABLE IF NOT EXISTS compras (
+            compraID INT AUTO_INCREMENT PRIMARY KEY,
+            fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            proveedor VARCHAR(150) NULL,
+            comprobante VARCHAR(80) NULL,
+            total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            observacion VARCHAR(255) NULL,
+            usuarioID INT NULL,
+            estado TINYINT NOT NULL DEFAULT 1,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_compras_fecha (fecha),
+            INDEX idx_compras_usuarioID (usuarioID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $conn->exec("
+        CREATE TABLE IF NOT EXISTS detallecompra (
+            detalleCompraID INT AUTO_INCREMENT PRIMARY KEY,
+            compraID INT NOT NULL,
+            productoID INT NOT NULL,
+            cantidad INT NOT NULL,
+            precioCompra DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            precioVenta DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            fechaVencimiento DATE NULL,
+            INDEX idx_detallecompra_compraID (compraID),
+            INDEX idx_detallecompra_productoID (productoID),
+            CONSTRAINT fk_detallecompra_compra
+                FOREIGN KEY (compraID) REFERENCES compras(compraID)
+                ON DELETE CASCADE,
+            CONSTRAINT fk_detallecompra_producto
+                FOREIGN KEY (productoID) REFERENCES productos(productoID)
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $conn->exec("
+        CREATE TABLE IF NOT EXISTS kardex_movimientos (
+            kardexID INT AUTO_INCREMENT PRIMARY KEY,
+            productoID INT NOT NULL,
+            fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            tipoMovimiento VARCHAR(20) NOT NULL,
+            concepto VARCHAR(50) NOT NULL,
+            referenciaTipo VARCHAR(30) NULL,
+            referenciaID INT NULL,
+            cantidadEntrada INT NOT NULL DEFAULT 0,
+            cantidadSalida INT NOT NULL DEFAULT 0,
+            saldoAnterior INT NOT NULL DEFAULT 0,
+            saldoNuevo INT NOT NULL DEFAULT 0,
+            costoUnitario DECIMAL(10,2) NULL,
+            precioUnitario DECIMAL(10,2) NULL,
+            totalMovimiento DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            observacion VARCHAR(255) NULL,
+            usuarioID INT NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_kardex_producto_fecha (productoID, fecha),
+            INDEX idx_kardex_referencia (referenciaTipo, referenciaID),
+            INDEX idx_kardex_concepto (concepto),
+            CONSTRAINT fk_kardex_producto
+                FOREIGN KEY (productoID) REFERENCES productos(productoID)
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function inicializarKardexDesdeStock(PDO $conn, ?int $usuarioID = null): void {
+    asegurarTablasKardex($conn);
+
+    $stmt = $conn->prepare("
+        INSERT INTO kardex_movimientos
+        (productoID, fecha, tipoMovimiento, concepto, referenciaTipo, referenciaID,
+         cantidadEntrada, cantidadSalida, saldoAnterior, saldoNuevo, costoUnitario,
+         precioUnitario, totalMovimiento, observacion, usuarioID)
+        SELECT
+            p.productoID,
+            NOW(),
+            'entrada',
+            'saldo_inicial',
+            'producto',
+            p.productoID,
+            p.stock,
+            0,
+            0,
+            p.stock,
+            p.precioCompra,
+            p.precioVenta,
+            p.stock * COALESCE(p.precioCompra, 0),
+            'Saldo inicial migrado desde inventario',
+            ?
+        FROM productos p
+        WHERE p.stock > 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM kardex_movimientos km
+              WHERE km.productoID = p.productoID
+              LIMIT 1
+          )
+    ");
+    $stmt->execute([$usuarioID]);
+}
+
+function registrarMovimientoKardex(
+    PDO $conn,
+    int $productoID,
+    string $tipoMovimiento,
+    string $concepto,
+    int $cantidadEntrada,
+    int $cantidadSalida,
+    int $saldoAnterior,
+    int $saldoNuevo,
+    ?string $referenciaTipo = null,
+    ?int $referenciaID = null,
+    ?float $costoUnitario = null,
+    ?float $precioUnitario = null,
+    ?string $observacion = null,
+    ?int $usuarioID = null
+): int {
+    if(!tablaExiste($conn, 'kardex_movimientos')){
+        asegurarTablasKardex($conn);
+    }
+
+    $totalMovimiento = 0;
+    if($cantidadEntrada > 0){
+        $totalMovimiento = round($cantidadEntrada * (float)($costoUnitario ?? 0), 2);
+    } elseif($cantidadSalida > 0){
+        $valorUnitario = $precioUnitario ?? $costoUnitario ?? 0;
+        $totalMovimiento = round($cantidadSalida * (float)$valorUnitario, 2);
+    }
+
+    $stmt = $conn->prepare("
+        INSERT INTO kardex_movimientos
+        (productoID, tipoMovimiento, concepto, referenciaTipo, referenciaID,
+         cantidadEntrada, cantidadSalida, saldoAnterior, saldoNuevo, costoUnitario,
+         precioUnitario, totalMovimiento, observacion, usuarioID)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+        $productoID,
+        $tipoMovimiento,
+        $concepto,
+        $referenciaTipo,
+        $referenciaID,
+        $cantidadEntrada,
+        $cantidadSalida,
+        $saldoAnterior,
+        $saldoNuevo,
+        $costoUnitario,
+        $precioUnitario,
+        $totalMovimiento,
+        $observacion,
+        $usuarioID
+    ]);
+
+    return (int)$conn->lastInsertId();
+}
+
+function aplicarMovimientoStock(
+    PDO $conn,
+    int $productoID,
+    string $tipoMovimiento,
+    string $concepto,
+    int $cantidad,
+    ?string $referenciaTipo = null,
+    ?int $referenciaID = null,
+    ?float $costoUnitario = null,
+    ?float $precioUnitario = null,
+    ?string $observacion = null,
+    ?int $usuarioID = null
+): array {
+    if($cantidad <= 0){
+        throw new Exception('La cantidad del movimiento debe ser mayor a cero.');
+    }
+
+    if(!in_array($tipoMovimiento, ['entrada', 'salida'], true)){
+        throw new Exception('Tipo de movimiento kardex invalido.');
+    }
+
+    if(!tablaExiste($conn, 'kardex_movimientos')){
+        asegurarTablasKardex($conn);
+    }
+
+    $stmt = $conn->prepare("
+        SELECT stock
+        FROM productos
+        WHERE productoID = ?
+        FOR UPDATE
+    ");
+    $stmt->execute([$productoID]);
+    $producto = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if(!$producto){
+        throw new Exception('Producto no encontrado para movimiento kardex.');
+    }
+
+    $saldoAnterior = (int)$producto['stock'];
+    $cantidadEntrada = $tipoMovimiento === 'entrada' ? $cantidad : 0;
+    $cantidadSalida = $tipoMovimiento === 'salida' ? $cantidad : 0;
+    $saldoNuevo = $tipoMovimiento === 'entrada'
+        ? $saldoAnterior + $cantidad
+        : $saldoAnterior - $cantidad;
+
+    if($saldoNuevo < 0){
+        throw new Exception('Stock insuficiente para registrar salida de kardex.');
+    }
+
+    $stmtUpdate = $conn->prepare("
+        UPDATE productos
+        SET stock = ?
+        WHERE productoID = ?
+    ");
+    $stmtUpdate->execute([$saldoNuevo, $productoID]);
+
+    $kardexID = registrarMovimientoKardex(
+        $conn,
+        $productoID,
+        $tipoMovimiento,
+        $concepto,
+        $cantidadEntrada,
+        $cantidadSalida,
+        $saldoAnterior,
+        $saldoNuevo,
+        $referenciaTipo,
+        $referenciaID,
+        $costoUnitario,
+        $precioUnitario,
+        $observacion,
+        $usuarioID
+    );
+
+    return [
+        'kardexID' => $kardexID,
+        'saldoAnterior' => $saldoAnterior,
+        'saldoNuevo' => $saldoNuevo
+    ];
+}
+
 function obtenerClienteGeneral(PDO $conn): array {
     $stmt = $conn->prepare("
         SELECT *

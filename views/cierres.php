@@ -182,6 +182,17 @@ foreach($cierres as $c){
         $totales[$campo] += floatval($c[$campo] ?? 0);
     }
 }
+
+function cantidadCierre($valor): string {
+    $numero = (float)$valor;
+    $redondeado = round($numero);
+
+    if(abs($numero - $redondeado) < 0.0001){
+        return (string)(int)$redondeado;
+    }
+
+    return number_format($numero, 2, '.', '');
+}
 ?>
 
 <!DOCTYPE html>
@@ -285,7 +296,7 @@ foreach($cierres as $c){
         <thead>
             <tr>
                 <th>Producto</th>
-                <th>Cantidad</th>
+                <th>Cant. cerrada</th>
                 <th>Precio Compra</th>
                 <th>Precio Venta</th>
                 <th>Total Compra</th>
@@ -297,7 +308,7 @@ foreach($cierres as $c){
             <?php foreach($detalleGanancia as $d): ?>
             <tr>
                 <td><?= htmlspecialchars($d['nombre']) ?></td>
-                <td><?= number_format($d['cantidad'], 2, '.', '') ?></td>
+                <td><?= cantidadCierre($d['cantidad']) ?></td>
                 <td>S/ <?= number_format($d['precioCompra'], 2, '.', '') ?></td>
                 <td>S/ <?= number_format($d['precioVenta'], 2, '.', '') ?></td>
                 <td>S/ <?= number_format($d['totalCompra'], 2, '.', '') ?></td>

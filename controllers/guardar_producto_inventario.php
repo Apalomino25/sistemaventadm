@@ -64,30 +64,68 @@ if($modo !== 'actualizar_stock'){
 
 try {
     asegurarColumnasInventario($conn);
+    asegurarTablasKardex($conn);
+    inicializarKardexDesdeStock($conn, intval($_SESSION['usuarioID'] ?? 0) ?: null);
+
+    $conn->beginTransaction();
 
     $stmtCodigo = $conn->prepare("
         SELECT productoID, nombre, stock
         FROM productos
         WHERE codigo = ?
         LIMIT 1
+        FOR UPDATE
     ");
     $stmtCodigo->execute([$codigo]);
     $productoExistente = $stmtCodigo->fetch(PDO::FETCH_ASSOC);
 
     if($productoExistente){
         if($productoID > 0 && $productoID !== (int)$productoExistente['productoID']){
-            responderInventario(['ok' => false, 'error' => 'El codigo pertenece a otro producto.']);
+            throw new Exception('El codigo pertenece a otro producto.');
         }
 
         $stmtUpdate = $conn->prepare("
             UPDATE productos
-            SET stock = ?,
-                precioVenta = ?,
+            SET precioVenta = ?,
                 fechaVencimiento = ?,
                 estado = 1
             WHERE productoID = ?
         ");
-        $stmtUpdate->execute([$stock, $precioVenta, $fechaVencimiento, $productoExistente['productoID']]);
+        $stmtUpdate->execute([$precioVenta, $fechaVencimiento, $productoExistente['productoID']]);
+
+        $stockAnterior = (int)$productoExistente['stock'];
+        $diferencia = $stock - $stockAnterior;
+        if($diferencia > 0){
+            aplicarMovimientoStock(
+                $conn,
+                (int)$productoExistente['productoID'],
+                'entrada',
+                'ajuste_inventario',
+                $diferencia,
+                'producto',
+                (int)$productoExistente['productoID'],
+                null,
+                $precioVenta,
+                'Ajuste manual de inventario',
+                intval($_SESSION['usuarioID'] ?? 0) ?: null
+            );
+        } elseif($diferencia < 0){
+            aplicarMovimientoStock(
+                $conn,
+                (int)$productoExistente['productoID'],
+                'salida',
+                'ajuste_inventario',
+                abs($diferencia),
+                'producto',
+                (int)$productoExistente['productoID'],
+                null,
+                $precioVenta,
+                'Ajuste manual de inventario',
+                intval($_SESSION['usuarioID'] ?? 0) ?: null
+            );
+        }
+
+        $conn->commit();
 
         responderInventario([
             'ok' => true,
@@ -99,7 +137,7 @@ try {
     $stmtCategoria = $conn->prepare("SELECT COUNT(*) FROM categoria WHERE categoriaID = ?");
     $stmtCategoria->execute([$categoriaID]);
     if((int)$stmtCategoria->fetchColumn() === 0){
-        responderInventario(['ok' => false, 'error' => 'Categoria invalida.']);
+        throw new Exception('Categoria invalida.');
     }
 
     $stmt = $conn->prepare("
@@ -115,16 +153,36 @@ try {
         $precioCompra,
         $precioVenta,
         $categoriaID,
-        $stock,
+        0,
         $fechaVencimiento
     ]);
+
+    $nuevoProductoID = (int)$conn->lastInsertId();
+    aplicarMovimientoStock(
+        $conn,
+        $nuevoProductoID,
+        'entrada',
+        'stock_inicial',
+        $stock,
+        'producto',
+        $nuevoProductoID,
+        $precioCompra,
+        $precioVenta,
+        'Stock inicial del producto',
+        intval($_SESSION['usuarioID'] ?? 0) ?: null
+    );
+
+    $conn->commit();
 
     responderInventario([
         'ok' => true,
         'message' => 'Producto/lote registrado correctamente.',
-        'productoID' => $conn->lastInsertId()
+        'productoID' => $nuevoProductoID
     ]);
 } catch(Throwable $e){
+    if(isset($conn) && $conn->inTransaction()){
+        $conn->rollBack();
+    }
     responderInventario(['ok' => false, 'error' => $e->getMessage()]);
 }
 ?>

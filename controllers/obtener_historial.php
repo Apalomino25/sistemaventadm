@@ -90,7 +90,7 @@ if(count($data) === 0){
     exit;
 }
 
-echo "<table class='tabla-ventas'>
+echo "<table class='tabla-ventas tabla-historial-ventas'>
         <thead>
             <tr>
                 <th>ID</th>

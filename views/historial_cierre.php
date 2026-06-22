@@ -4,8 +4,11 @@ require_once __DIR__ . "/../config/schema_helpers.php";
 
 asegurarColumnasPagos($conn);
 
-$fechaDesde = $_GET['fecha_desde'] ?? '';
-$fechaHasta = $_GET['fecha_hasta'] ?? '';
+date_default_timezone_set('America/Lima');
+$hoy = date('Y-m-d');
+
+$fechaDesde = $_GET['fecha_desde'] ?? $hoy;
+$fechaHasta = $_GET['fecha_hasta'] ?? $hoy;
 $estadoFiltro = $_GET['estado'] ?? '';
 
 $where = [];

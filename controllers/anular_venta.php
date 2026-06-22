@@ -1,42 +1,53 @@
 <?php
+session_start();
 header('Content-Type: application/json');
+
 require_once "../config/conexion.php";
 require_once "../config/schema_helpers.php";
 
-// Recibir JSON
 $data = json_decode(file_get_contents("php://input"), true);
 
-if (!$data || !isset($data['ventaID'])) {
-    echo json_encode(["ok"=>false, "error"=>"No se recibió ventaID"]);
+if(!$data || !isset($data['ventaID'])){
+    echo json_encode(["ok" => false, "error" => "No se recibio ventaID"]);
     exit;
 }
 
 $ventaID = intval($data['ventaID']);
+$usuarioID = intval($_SESSION['usuarioID'] ?? 0) ?: null;
 
 try {
     asegurarColumnasPagos($conn);
+    asegurarTablasKardex($conn);
+    inicializarKardexDesdeStock($conn, $usuarioID);
 
     $conn->beginTransaction();
 
-    // 🔹 Verificar si ya está anulada
-    $stmt = $conn->prepare("SELECT estado FROM ventas WHERE ventaID = :ventaID");
+    $stmt = $conn->prepare("
+        SELECT estado
+        FROM ventas
+        WHERE ventaID = :ventaID
+        FOR UPDATE
+    ");
     $stmt->execute([':ventaID' => $ventaID]);
-    $venta = $stmt->fetch();
+    $venta = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($venta && $venta['estado'] == 0) {
-        echo json_encode(["ok"=>false, "error"=>"La venta ya está anulada"]);
-        exit;
+    if(!$venta){
+        throw new Exception("Venta no encontrada");
     }
 
-    // 🔹 Obtener detalle
+    if((int)$venta['estado'] === 0){
+        throw new Exception("La venta ya esta anulada");
+    }
+
     $stmt = $conn->prepare("
-        SELECT productoID, cantidad 
-        FROM detalleventa 
-        WHERE ventaID = :ventaID
+        SELECT d.productoID, d.cantidad, d.precioUnitario, p.precioCompra
+        FROM detalleventa d
+        INNER JOIN productos p ON p.productoID = d.productoID
+        WHERE d.ventaID = :ventaID
     ");
-    
     $stmt->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
     $stmt->execute();
+    $detalles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmtPagos = $conn->prepare("
         UPDATE venta_pagos
@@ -46,24 +57,25 @@ try {
     $stmtPagos->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
     $stmtPagos->execute();
 
-    $detalles = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // 🔹 Devolver stock
-    foreach ($detalles as $item) {
-        $stmtUpdate = $conn->prepare("
-            UPDATE productos 
-            SET stock = stock + :cantidad 
-            WHERE productoID = :productoID
-        ");
-        $stmtUpdate->bindParam(':cantidad', $item['cantidad'], PDO::PARAM_INT);
-        $stmtUpdate->bindParam(':productoID', $item['productoID'], PDO::PARAM_INT);
-        $stmtUpdate->execute();
+    foreach($detalles as $item){
+        aplicarMovimientoStock(
+            $conn,
+            (int)$item['productoID'],
+            'entrada',
+            'anulacion_venta',
+            (int)$item['cantidad'],
+            'venta',
+            $ventaID,
+            floatval($item['precioCompra']),
+            floatval($item['precioUnitario']),
+            'Anulacion de venta #' . $ventaID,
+            $usuarioID
+        );
     }
 
-    // 🔹 Anular venta
     $stmt = $conn->prepare("
-        UPDATE ventas 
-        SET estado = 0 
+        UPDATE ventas
+        SET estado = 0
         WHERE ventaID = :ventaID
     ");
     $stmt->bindParam(':ventaID', $ventaID, PDO::PARAM_INT);
@@ -71,10 +83,12 @@ try {
 
     $conn->commit();
 
-    echo json_encode(["ok"=>true]);
+    echo json_encode(["ok" => true]);
+} catch(Throwable $e){
+    if(isset($conn) && $conn->inTransaction()){
+        $conn->rollBack();
+    }
 
-} catch (Exception $e) {
-
-    $conn->rollBack();
-    echo json_encode(["ok"=>false, "error"=>$e->getMessage()]);
+    echo json_encode(["ok" => false, "error" => $e->getMessage()]);
 }
+?>

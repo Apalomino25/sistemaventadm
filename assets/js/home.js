@@ -1,72 +1,77 @@
-// home.js
-
-// Manejo de dropdowns del menú
 const dropdowns = document.querySelectorAll(".dropdown");
+
 dropdowns.forEach(dropdown => {
     const button = dropdown.querySelector(".menu-btn");
-    button.addEventListener("click", (e) => {
+    if(!button) return;
+
+    button.addEventListener("click", e => {
         e.stopPropagation();
-        // Cerrar otros dropdowns
-        dropdowns.forEach(d => {
-            if (d !== dropdown) d.classList.remove("active");
+        dropdowns.forEach(item => {
+            if(item !== dropdown) item.classList.remove("active");
         });
+
+        if(!dropdown.querySelector(".dropdown-content")){
+            dropdown.classList.remove("active");
+            return;
+        }
+
         dropdown.classList.toggle("active");
     });
 });
 
-// Manejo del menú de usuario
 const userBtn = document.getElementById("userBtn");
 const userMenu = document.getElementById("userMenu");
 
 if(userBtn){
-    userBtn.addEventListener("click", (e) => {
+    userBtn.addEventListener("click", e => {
         e.stopPropagation();
-        userMenu.classList.toggle("active");
+        userMenu?.classList.toggle("active");
     });
 }
 
-// Cerrar menus si se hace click fuera
 document.addEventListener("click", () => {
-    if(userMenu) userMenu.classList.remove("active");
-    dropdowns.forEach(d => d.classList.remove("active"));
+    userMenu?.classList.remove("active");
+    dropdowns.forEach(dropdown => dropdown.classList.remove("active"));
 });
-
-// Función para cargar páginas vía fetch
-
 
 function cargarPagina(pagina){
     const separador = pagina.includes("?") ? "&" : "?";
+
     fetch(`${pagina}${separador}_=${Date.now()}`)
         .then(res => res.text())
         .then(data => {
-            document.getElementById("contenido").innerHTML = data;
+            const contenido = document.getElementById("contenido");
+            contenido.innerHTML = data;
 
-            // Inicializar POS si existe
-            if(typeof iniciarPOS === "function") iniciarPOS();
+            if(typeof iniciarPOS === "function"){
+                iniciarPOS();
+            }
+
             if(pagina.includes("inventarios.php") && typeof inicializarInventarios === "function"){
                 inicializarInventarios();
             }
 
-            // Inicializar cierres si se cargó cierres.php
-           if(pagina.includes("cierres.php") && typeof initCierres === "function"){
-            initCierres(); // Inicializa la lógica de cierres
-}
+            if(pagina.includes("compras.php") && typeof inicializarCompras === "function"){
+                inicializarCompras();
+            }
+
+            if(pagina.includes("cierres.php") && typeof initCierres === "function"){
+                initCierres();
+            }
+
+            if(typeof aplicarEtiquetasTablasResponsivas === "function"){
+                aplicarEtiquetasTablasResponsivas(contenido);
+            }
         })
-        .catch(err => console.error("Error cargando página:", err));
+        .catch(err => console.error("Error cargando pagina:", err));
 }
 
-
-
-
-
-// Evento click para botones históricos (opcional)
-document.addEventListener("click", function(e){
+document.addEventListener("click", e => {
     if(e.target && e.target.id === "btnHistoricoVentas"){
         cargarPagina("historial.php");
     }
 });
 
-// Cargar POS al inicio
 window.addEventListener("DOMContentLoaded", () => {
-    cargarPagina('pos.php');
+    cargarPagina("pos.php");
 });

@@ -7,6 +7,31 @@ let busquedaSecuencia = 0;
 let clienteTimer = null;
 let clienteGeneral = null;
 
+function aplicarEtiquetasTablaResponsiva(tabla){
+    if(!tabla) return;
+
+    const encabezados = Array.from(tabla.querySelectorAll("thead th")).map(th => th.textContent.trim());
+    tabla.querySelectorAll("tbody tr, tfoot tr").forEach(fila => {
+        Array.from(fila.children).forEach((celda, index) => {
+            if(celda.colSpan && celda.colSpan > 1){
+                celda.dataset.label = "";
+                return;
+            }
+
+            celda.dataset.label = encabezados[index] || "";
+        });
+    });
+}
+
+function aplicarEtiquetasTablasResponsivas(scope = document){
+    const raiz = scope && scope.querySelectorAll ? scope : document;
+    raiz.querySelectorAll(".tabla-ventas, #tabla-cierres, #tabla-ganancia").forEach(tabla => {
+        aplicarEtiquetasTablaResponsiva(tabla);
+    });
+}
+
+window.aplicarEtiquetasTablasResponsivas = aplicarEtiquetasTablasResponsivas;
+
 // =======================
 // POS PRINCIPAL
 // =======================
@@ -18,6 +43,8 @@ window.iniciarPOS = function() {
     const btnGrabar = document.getElementById("btnGrabar");
     const fecha = document.getElementById("fecha");
     const mensajePago = document.getElementById("msmPago");
+
+    aplicarEtiquetasTablasResponsivas();
 
     if(!inputCodigo) return;
     inputCodigo.focus();
@@ -473,7 +500,12 @@ function agregarProductoTabla(prod){
     for(let fila of filas){
         if(fila.querySelector(".producto-id")?.textContent == prod.productoID){
             let cantidadCelda = fila.querySelector(".cantidad");
+            const stockDisponible = parseInt(fila.dataset.stockDisponible) || parseInt(fila.children[3]?.textContent) || 0;
             let cantidad = parseInt(cantidadCelda.textContent) + 1;
+            if(cantidad > stockDisponible){
+                alert("No hay stock suficiente para agregar mas unidades de este producto");
+                return;
+            }
             cantidadCelda.textContent = cantidad;
 
             recalcularSubtotalFila(fila);
@@ -493,6 +525,7 @@ function agregarProductoTabla(prod){
     const fechaVencimiento = formatearFechaVencimiento(prod.fechaVencimiento);
 
     const fila = document.createElement("tr");
+    fila.dataset.stockDisponible = parseInt(prod.stock) || 0;
     fila.innerHTML = `
         <td class="producto-id">${prod.productoID}</td>
         <td>${prod.nombre}</td>
@@ -513,6 +546,7 @@ function agregarProductoTabla(prod){
     `;  
 
     tabla.appendChild(fila);
+    aplicarEtiquetasTablaResponsiva(fila.closest("table"));
 
     fila.querySelector(".monto-detalle-pagado").addEventListener("input", () => {
         actualizarEstadoPagoFila(fila);
@@ -532,6 +566,11 @@ function agregarProductoTabla(prod){
         nuevaCantidad = parseInt(nuevaCantidad);
         if(isNaN(nuevaCantidad) || nuevaCantidad <= 0){
             alert("Cantidad inválida");
+            return;
+        }
+        const stockDisponible = parseInt(fila.dataset.stockDisponible) || parseInt(fila.children[3]?.textContent) || 0;
+        if(nuevaCantidad > stockDisponible){
+            alert("Stock insuficiente. Disponible: " + stockDisponible);
             return;
         }
         fila.querySelector(".cantidad").textContent = nuevaCantidad;
@@ -823,11 +862,18 @@ function guardarVenta(){
     const resumenPagosMixtos = obtenerResumenPagosMixtos();
     const totalPagosMixtos = resumenPagosMixtos.total;
     const excedentePagosMixtos = Math.max(totalPagosMixtos - totalPagadoDetalle, 0);
+    let productoSinStock = "";
 
     filas.forEach(fila => {
+        const cantidad = parseInt(fila.querySelector(".cantidad")?.textContent) || 0;
+        const stockDisponible = parseInt(fila.dataset.stockDisponible) || parseInt(fila.children[3]?.textContent) || 0;
+        if(cantidad > stockDisponible){
+            productoSinStock = fila.children[1]?.textContent || "Producto";
+        }
+
         productos.push({
             productoID: parseInt(fila.querySelector(".producto-id")?.textContent),
-            cantidad: parseInt(fila.querySelector(".cantidad")?.textContent),
+            cantidad,
             precio: parseFloat(fila.querySelector(".precio")?.textContent),
             subtotal: parseFloat(fila.querySelector(".subtotal")?.textContent),
             montoPagado: parseFloat(fila.querySelector(".monto-detalle-pagado")?.value) || 0,
@@ -839,6 +885,12 @@ function guardarVenta(){
     // 🔴 Validaciones
     if(productos.length === 0){
         alert("No hay productos en la venta");
+        resetBoton(btn);
+        return;
+    }
+
+    if(productoSinStock){
+        alert("Stock insuficiente para: " + productoSinStock);
         resetBoton(btn);
         return;
     }
@@ -993,6 +1045,7 @@ function cargarHistorialVentas() {
         .then(res => res.text())
         .then(data => {
             contenedor.innerHTML = data;
+            aplicarEtiquetasTablasResponsivas(contenedor);
             if (typeof iniciarHistorial === "function") {
                 iniciarHistorial();
             }
@@ -1024,6 +1077,7 @@ if (e.target.classList.contains("ver")) {
             const modal = document.createElement('div');
             modal.innerHTML = html; // ya contiene estilos inline y botón de cerrar
             document.body.appendChild(modal);
+            aplicarEtiquetasTablasResponsivas(modal);
         })
         .catch(err => console.error("Error al ver detalle:", err));
 }
@@ -1371,6 +1425,7 @@ document.addEventListener("click", function(e) {
                 const modal = document.createElement('div');
                 modal.innerHTML = html; // Contiene estilos inline y botón de cerrar
                 document.body.appendChild(modal.firstElementChild || modal);
+                aplicarEtiquetasTablasResponsivas(document.body);
             })
             .catch(err => console.error("Error al ver detalle del cierre:", err));
     }
@@ -1436,6 +1491,7 @@ document.addEventListener("click", function(e) {
 // =======================
 
 document.addEventListener("DOMContentLoaded", () => {
+    aplicarEtiquetasTablasResponsivas();
     iniciarPOS();
     initCierres();
 });
@@ -1496,6 +1552,7 @@ document.addEventListener("submit", function(e) {
         .then(html => {
             const container = form.closest(".container") || document.body;
             container.outerHTML = html;
+            aplicarEtiquetasTablasResponsivas();
         })
         .catch(err => alert("Error al filtrar: " + err));
 });

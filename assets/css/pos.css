@@ -317,6 +317,51 @@ tr.inactivo{
     font-size:12px;
 }
 
+.tabla-ventas th,
+.tabla-ventas td{
+    overflow-wrap:anywhere;
+}
+
+.pos-container > .tabla-ventas{
+    table-layout:fixed;
+    font-size:12px;
+}
+
+.pos-container > .tabla-ventas th,
+.pos-container > .tabla-ventas td{
+    padding:8px 6px;
+}
+
+.pos-container > .tabla-ventas .monto-detalle-pagado{
+    width:74px;
+    min-width:0;
+}
+
+.tabla-historial-ventas{
+    table-layout:fixed;
+    font-size:11px;
+}
+
+.tabla-historial-ventas th,
+.tabla-historial-ventas td{
+    padding:7px 5px;
+}
+
+.tabla-historial-ventas select{
+    width:100%;
+    min-width:0;
+    font-size:11px;
+    padding:5px 4px;
+}
+
+.tabla-historial-ventas .acciones{
+    white-space:normal;
+}
+
+.tabla-historial-ventas .acciones i{
+    margin:0 3px;
+}
+
 /* Filtros */
 .filtros-historial{
     display:flex;
@@ -584,7 +629,7 @@ tr.inactivo{
     border:1px solid #bfe5c8;
 }
 
-@media (max-width:760px){
+@media (max-width:980px){
     .container,
     .pos-container{
         width:calc(100% - 18px);
@@ -607,7 +652,152 @@ tr.inactivo{
 
     .tabla-ventas{
         display:block;
-        overflow-x:auto;
-        white-space:nowrap;
+        border:0;
+        border-radius:0;
+        background:transparent;
+        overflow:visible;
+        white-space:normal;
+        font-size:13px;
+    }
+
+    .tabla-ventas thead{
+        display:none;
+    }
+
+    .tabla-ventas tbody,
+    .tabla-ventas tfoot{
+        display:block;
+    }
+
+    .tabla-ventas tbody tr,
+    .tabla-ventas tfoot tr{
+        display:block;
+        margin:0 0 10px;
+        border:1px solid var(--color-borde);
+        border-radius:10px;
+        background:#fff;
+        overflow:hidden;
+    }
+
+    .tabla-ventas td,
+    .tabla-ventas tfoot th{
+        display:grid;
+        grid-template-columns:minmax(108px, 40%) minmax(0, 1fr);
+        gap:8px;
+        align-items:center;
+        min-height:38px;
+        padding:8px 10px;
+        border-top:1px solid #eef0f2;
+        text-align:right;
+        white-space:normal;
+    }
+
+    .tabla-ventas tbody td:first-child,
+    .tabla-ventas tfoot th:first-child{
+        border-top:0;
+    }
+
+    .tabla-ventas td::before,
+    .tabla-ventas tfoot th::before{
+        content:attr(data-label);
+        color:var(--color-muted);
+        font-size:11px;
+        font-weight:800;
+        text-align:left;
+        text-transform:uppercase;
+    }
+
+    .tabla-ventas td[colspan],
+    .tabla-ventas tfoot th[colspan]{
+        display:block;
+        text-align:center;
+    }
+
+    .tabla-ventas td[colspan]::before,
+    .tabla-ventas tfoot th[colspan]::before{
+        content:"";
+    }
+
+    .tabla-ventas .acciones{
+        justify-content:flex-end;
+    }
+
+    .pos-container > .tabla-ventas .monto-detalle-pagado{
+        width:100%;
+        max-width:120px;
+        justify-self:end;
+    }
+}
+
+@media (max-width:1280px){
+    .tabla-historial-ventas{
+        display:block;
+        border:0;
+        border-radius:0;
+        background:transparent;
+        overflow:visible;
+        white-space:normal;
+        font-size:13px;
+    }
+
+    .tabla-historial-ventas thead{
+        display:none;
+    }
+
+    .tabla-historial-ventas tbody{
+        display:grid;
+        grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+        gap:10px;
+    }
+
+    .tabla-historial-ventas tbody tr{
+        display:block;
+        margin:0;
+        border:1px solid var(--color-borde);
+        border-radius:10px;
+        background:#fff;
+        overflow:hidden;
+    }
+
+    .tabla-historial-ventas td{
+        display:grid;
+        grid-template-columns:minmax(112px, 42%) minmax(0, 1fr);
+        gap:8px;
+        align-items:center;
+        min-height:36px;
+        padding:7px 10px;
+        border-top:1px solid #eef0f2;
+        text-align:right;
+        white-space:normal;
+    }
+
+    .tabla-historial-ventas tbody td:first-child{
+        border-top:0;
+    }
+
+    .tabla-historial-ventas td::before{
+        content:attr(data-label);
+        color:var(--color-muted);
+        font-size:11px;
+        font-weight:800;
+        text-align:left;
+        text-transform:uppercase;
+    }
+
+    .tabla-historial-ventas .acciones{
+        display:flex;
+        justify-content:flex-end;
+        gap:8px;
+    }
+
+    .tabla-historial-ventas .acciones::before{
+        margin-right:auto;
+    }
+
+    .tabla-historial-ventas select{
+        width:auto;
+        max-width:100%;
+        justify-self:end;
+        font-size:12px;
     }
 }

@@ -6,6 +6,8 @@ require_once __DIR__ . "/../config/auth_helpers.php";
 
 requerirAdministradorHtml();
 asegurarColumnasInventario($conn);
+asegurarTablasKardex($conn);
+inicializarKardexDesdeStock($conn, intval($_SESSION['usuarioID'] ?? 0) ?: null);
 
 // Alertas de vencimiento: 2 semanas (14 días) de anticipación
 $diasAlertaVencimiento = 14;
@@ -121,6 +123,7 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
 
     <div class="inventario-tabs" role="tablist" aria-label="Opciones de inventario">
         <button type="button" class="inventario-tab activo" data-inventario-panel="productos">Productos</button>
+        <button type="button" class="inventario-tab" data-inventario-panel="kardex">Kardex</button>
         <button type="button" class="inventario-tab" data-inventario-panel="categorias">Categorias</button>
     </div>
 
@@ -275,9 +278,75 @@ function estadoLoteInventario(array $producto, int $diasAlerta): array {
                                 data-producto-id="<?= intval($p['productoID']) ?>">
                             Stock / Vence / Precio
                         </button>
+                        <button type="button"
+                                class="btn-ver-kardex"
+                                data-producto-id="<?= intval($p['productoID']) ?>">
+                            Kardex
+                        </button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
+            </tbody>
+        </table>
+    </section>
+
+    <section id="panelKardexInventario" class="inventario-panel oculto">
+        <div class="inventario-buscador">
+            <label for="codigoBusquedaKardex">Kardex por producto</label>
+            <div class="inventario-buscador-linea">
+                <input type="text" id="codigoBusquedaKardex" autocomplete="off" placeholder="Codigo o nombre del producto">
+                <button type="button" id="btnBuscarKardex">Buscar</button>
+            </div>
+        </div>
+
+        <div id="mensajeKardex" class="mensaje-inventario nuevo">
+            Selecciona un producto para ver sus entradas, salidas y saldo.
+        </div>
+        <div id="resultadosKardexProducto" class="resultados-inventario oculto"></div>
+
+        <div id="resumenKardex" class="kardex-resumen oculto">
+            <div>
+                <span>Producto</span>
+                <strong id="kardexProductoNombre">-</strong>
+                <small id="kardexProductoDetalle">-</small>
+            </div>
+            <div>
+                <span>Entradas</span>
+                <strong id="kardexTotalEntradas">0</strong>
+            </div>
+            <div>
+                <span>Salidas</span>
+                <strong id="kardexTotalSalidas">0</strong>
+            </div>
+            <div>
+                <span>Saldo Kardex</span>
+                <strong id="kardexSaldo">0</strong>
+            </div>
+            <div>
+                <span>Stock actual</span>
+                <strong id="kardexStockActual">0</strong>
+            </div>
+        </div>
+
+        <table class="tabla-ventas tabla-kardex">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Ref.</th>
+                    <th>Entrada</th>
+                    <th>Salida</th>
+                    <th>Saldo ant.</th>
+                    <th>Saldo</th>
+                    <th>Costo</th>
+                    <th>Precio</th>
+                    <th>Obs.</th>
+                </tr>
+            </thead>
+            <tbody id="tablaKardex">
+                <tr>
+                    <td colspan="10">Sin producto seleccionado.</td>
+                </tr>
             </tbody>
         </table>
     </section>

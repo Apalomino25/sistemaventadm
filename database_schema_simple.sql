@@ -111,6 +111,65 @@ CREATE TABLE IF NOT EXISTS venta_pagos (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS compras (
+    compraID INT PRIMARY KEY AUTO_INCREMENT,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    proveedor VARCHAR(150) NULL,
+    comprobante VARCHAR(80) NULL,
+    total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    observacion VARCHAR(255) NULL,
+    usuarioID INT NULL,
+    estado TINYINT NOT NULL DEFAULT 1,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_compras_fecha (fecha),
+    INDEX idx_compras_usuarioID (usuarioID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS detallecompra (
+    detalleCompraID INT PRIMARY KEY AUTO_INCREMENT,
+    compraID INT NOT NULL,
+    productoID INT NOT NULL,
+    cantidad INT NOT NULL,
+    precioCompra DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    precioVenta DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    fechaVencimiento DATE NULL,
+    INDEX idx_detallecompra_compraID (compraID),
+    INDEX idx_detallecompra_productoID (productoID),
+    CONSTRAINT fk_detallecompra_compra
+        FOREIGN KEY (compraID) REFERENCES compras(compraID)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_detallecompra_producto
+        FOREIGN KEY (productoID) REFERENCES productos(productoID)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS kardex_movimientos (
+    kardexID INT PRIMARY KEY AUTO_INCREMENT,
+    productoID INT NOT NULL,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tipoMovimiento VARCHAR(20) NOT NULL,
+    concepto VARCHAR(50) NOT NULL,
+    referenciaTipo VARCHAR(30) NULL,
+    referenciaID INT NULL,
+    cantidadEntrada INT NOT NULL DEFAULT 0,
+    cantidadSalida INT NOT NULL DEFAULT 0,
+    saldoAnterior INT NOT NULL DEFAULT 0,
+    saldoNuevo INT NOT NULL DEFAULT 0,
+    costoUnitario DECIMAL(10,2) NULL,
+    precioUnitario DECIMAL(10,2) NULL,
+    totalMovimiento DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    observacion VARCHAR(255) NULL,
+    usuarioID INT NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_kardex_producto_fecha (productoID, fecha),
+    INDEX idx_kardex_referencia (referenciaTipo, referenciaID),
+    INDEX idx_kardex_concepto (concepto),
+    CONSTRAINT fk_kardex_producto
+        FOREIGN KEY (productoID) REFERENCES productos(productoID)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS cierres (
     cierreID INT PRIMARY KEY AUTO_INCREMENT,
     fecha DATE NOT NULL,

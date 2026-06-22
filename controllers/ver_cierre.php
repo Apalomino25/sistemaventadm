@@ -22,104 +22,98 @@ if(preg_match('/^\d{4}-\d{2}-\d{2}$/', $id)){
     }
 }
 
-// Obtener info del cierre
-$stmtCierre = $conn->prepare("
+$stmt = $conn->prepare("
     SELECT c.*, u.usuario
     FROM cierres c
     LEFT JOIN usuarios u ON c.usuario_cierre = u.usuarioID
     WHERE c.fecha = ?
+    ORDER BY c.tipopago
 ");
-$stmtCierre->execute([$fecha]);
-$cierre = $stmtCierre->fetch(PDO::FETCH_ASSOC);
-
-if(!$cierre){
-    exit("Cierre no encontrado");
-}
-
-// Obtener datos de ventas por tipo de pago
-$stmtVentas = $conn->prepare("
-    SELECT 
-        COALESCE(v.tipoPago, 'sin_tipo') as tipopago,
-        COUNT(v.ventaID) as cantidad_ventas,
-        SUM(v.total) as total_ventas,
-        SUM(CASE WHEN v.estadoPago = 'pagado' THEN v.pago ELSE 0 END) as total_pagado,
-        SUM(CASE WHEN v.estadoPago = 'pendiente' THEN v.total ELSE 0 END) as total_pendiente,
-        SUM(v.vuelto) as total_vuelto,
-        SUM(CASE WHEN v.estadoPago = 'pendiente' THEN 0 ELSE v.pago END) as total_recibido
-    FROM ventas v
-    WHERE DATE(v.fecha) = ? AND v.estado = 1
-    GROUP BY v.tipoPago
-");
-$stmtVentas->execute([$fecha]);
-$cierres = $stmtVentas->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$fecha]);
+$cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if(!$cierres){
-    $cierres = [];
+    exit("Cierre no encontrado");
 }
 
 $totales = [
     'total_ventas' => 0,
     'total_pagado' => 0,
     'total_pendiente' => 0,
-    'total_vuelto' => 0,
+    'total_pendientes_cobrados' => 0,
     'total_recibido' => 0,
-    'cantidad_ventas' => 0
+    'total_vuelto' => 0,
+    'total_compra' => 0,
+    'total_ganancia' => 0,
+    'fisico' => 0,
+    'diferencia' => 0
 ];
-
-foreach($cierres as $c){
-    $totales['total_ventas'] += floatval($c['total_ventas'] ?? 0);
-    $totales['total_pagado'] += floatval($c['total_pagado'] ?? 0);
-    $totales['total_pendiente'] += floatval($c['total_pendiente'] ?? 0);
-    $totales['total_vuelto'] += floatval($c['total_vuelto'] ?? 0);
-    $totales['total_recibido'] += floatval($c['total_recibido'] ?? 0);
-    $totales['cantidad_ventas'] += intval($c['cantidad_ventas'] ?? 0);
-}
 
 foreach($cierres as $c){
     foreach($totales as $campo => $_){
         $totales[$campo] += floatval($c[$campo] ?? 0);
     }
 }
+
+function dineroCierre($valor): string {
+    return 'S/ ' . number_format((float)$valor, 2, '.', '');
+}
 ?>
 
 <div class="detalle-cierre-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#fff;max-width:1000px;width:100%;max-height:90vh;overflow:auto;padding:20px;border-radius:8px;">
+    <div style="background:#fff;max-width:1120px;width:100%;max-height:90vh;overflow:auto;padding:20px;border-radius:8px;">
         <button type="button" onclick="this.closest('.detalle-cierre-modal').remove()" style="float:right;padding:6px 10px;cursor:pointer;">Cerrar</button>
         <h2>Cierre del <?= date('d-m-Y', strtotime($fecha)) ?></h2>
+        <p><strong>Usuario:</strong> <?= htmlspecialchars($cierres[0]['usuario'] ?? '') ?></p>
         <table class="tabla-ventas" style="width:100%;border-collapse:collapse;">
             <thead>
                 <tr>
                     <th>Tipo Pago</th>
-                    <th>Cant. Ventas</th>
-                    <th>Total Venta</th>
+                    <th>Total Ventas</th>
                     <th>Pagado</th>
                     <th>Pendiente</th>
+                    <th>Boletas Pend.</th>
                     <th>Recibido</th>
                     <th>Vuelto</th>
+                    <th>Compra</th>
+                    <th>Ganancia</th>
+                    <th>Fisico</th>
+                    <th>Diferencia</th>
+                    <th>Estado</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach($cierres as $c): ?>
                 <tr>
                     <td><?= htmlspecialchars(strtoupper($c['tipopago'] ?? 'sin_tipo')) ?></td>
-                    <td><?= intval($c['cantidad_ventas'] ?? 0) ?></td>
-                    <td>S/ <?= number_format(floatval($c['total_ventas'] ?? 0), 2) ?></td>
-                    <td>S/ <?= number_format(floatval($c['total_pagado'] ?? 0), 2) ?></td>
-                    <td>S/ <?= number_format(floatval($c['total_pendiente'] ?? 0), 2) ?></td>
-                    <td>S/ <?= number_format(floatval($c['total_recibido'] ?? 0), 2) ?></td>
-                    <td>S/ <?= number_format(floatval($c['total_vuelto'] ?? 0), 2) ?></td>
+                    <td><?= dineroCierre($c['total_ventas'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_pagado'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_pendiente'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_pendientes_cobrados'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_recibido'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_vuelto'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_compra'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['total_ganancia'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['fisico'] ?? 0) ?></td>
+                    <td><?= dineroCierre($c['diferencia'] ?? 0) ?></td>
+                    <td><?= intval($c['estado'] ?? 1) === 1 ? 'Cerrado' : 'Anulado' ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
             <tfoot>
                 <tr>
                     <th>Total</th>
-                    <th><?= intval($totales['cantidad_ventas']) ?></th>
-                    <th>S/ <?= number_format($totales['total_ventas'], 2) ?></th>
-                    <th>S/ <?= number_format($totales['total_pagado'], 2) ?></th>
-                    <th>S/ <?= number_format($totales['total_pendiente'], 2) ?></th>
-                    <th>S/ <?= number_format($totales['total_recibido'], 2) ?></th>
-                    <th>S/ <?= number_format($totales['total_vuelto'], 2) ?></th>
+                    <th><?= dineroCierre($totales['total_ventas']) ?></th>
+                    <th><?= dineroCierre($totales['total_pagado']) ?></th>
+                    <th><?= dineroCierre($totales['total_pendiente']) ?></th>
+                    <th><?= dineroCierre($totales['total_pendientes_cobrados']) ?></th>
+                    <th><?= dineroCierre($totales['total_recibido']) ?></th>
+                    <th><?= dineroCierre($totales['total_vuelto']) ?></th>
+                    <th><?= dineroCierre($totales['total_compra']) ?></th>
+                    <th><?= dineroCierre($totales['total_ganancia']) ?></th>
+                    <th><?= dineroCierre($totales['fisico']) ?></th>
+                    <th><?= dineroCierre($totales['diferencia']) ?></th>
+                    <th></th>
                 </tr>
             </tfoot>
         </table>

@@ -49,6 +49,8 @@ $fechaPago = null;
 
 try {
     asegurarColumnasPagos($conn);
+    asegurarTablasKardex($conn);
+    inicializarKardexDesdeStock($conn, $usuarioID);
 
     if($clienteID <= 0){
         $clienteGeneral = obtenerClienteGeneral($conn);
@@ -73,7 +75,7 @@ try {
     $conn->beginTransaction();
 
     $stmtProducto = $conn->prepare("
-        SELECT p.precioVenta, p.categoriaID, p.stock, c.nombre AS categoriaNombre
+        SELECT p.precioCompra, p.precioVenta, p.categoriaID, p.stock, c.nombre AS categoriaNombre
         FROM productos p
         LEFT JOIN categoria c ON c.categoriaID = p.categoriaID
         WHERE p.productoID = ? AND p.estado = 1
@@ -136,6 +138,7 @@ try {
         $productosValidados[] = [
             "productoID" => $productoID,
             "cantidad" => $cantidad,
+            "precioCompra" => floatval($productoBD["precioCompra"]),
             "precio" => $precio,
             "subtotal" => $subtotal,
             "estadoPago" => $estadoDetalle,
@@ -268,11 +271,6 @@ try {
         (ventaID, productoID, cantidad, precioUnitario, subtotal, estadoPago, montoPagado, saldoPendiente, fechaPago)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmtStock = $conn->prepare("
-        UPDATE productos
-        SET stock = stock - ?
-        WHERE productoID = ?
-    ");
 
     foreach($productosValidados as $prod){
         $stmtDetalle->execute([
@@ -287,10 +285,19 @@ try {
             $prod["montoPagado"] > 0 ? $fechaPago : null
         ]);
 
-        $stmtStock->execute([
+        aplicarMovimientoStock(
+            $conn,
+            $prod["productoID"],
+            'salida',
+            'venta',
             $prod["cantidad"],
-            $prod["productoID"]
-        ]);
+            'venta',
+            (int)$ventaID,
+            $prod["precioCompra"],
+            $prod["precio"],
+            'Venta #' . $ventaID,
+            $usuarioID
+        );
     }
 
     if(!empty($pagosParaCierre)){

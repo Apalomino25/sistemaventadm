@@ -70,6 +70,17 @@ table{
     font-size:14px;
 }
 
+#tabla-cierres{
+    table-layout:fixed;
+    font-size:12px;
+}
+
+#tabla-cierres th,
+#tabla-cierres td{
+    padding:8px 6px;
+    overflow-wrap:anywhere;
+}
+
 table thead th{
     background:#fff4fa;
     color:#4b1d38;
@@ -96,7 +107,8 @@ table tfoot th{
 }
 
 input.fisico{
-    width:110px;
+    width:100%;
+    max-width:110px;
     min-height:36px;
     padding:7px 9px;
     text-align:center;
@@ -144,7 +156,7 @@ button#guardar-cierre:disabled{
     transform:none;
 }
 
-@media (max-width:760px){
+@media (max-width:980px){
     body{
         padding:10px;
     }
@@ -156,7 +168,73 @@ button#guardar-cierre:disabled{
 
     table{
         display:block;
-        overflow-x:auto;
-        white-space:nowrap;
+        border:0;
+        border-radius:0;
+        background:transparent;
+        overflow:visible;
+        white-space:normal;
+        font-size:13px;
+    }
+
+    table thead{
+        display:none;
+    }
+
+    table tbody,
+    table tfoot{
+        display:block;
+    }
+
+    table tbody tr,
+    table tfoot tr{
+        display:block;
+        margin:0 0 10px;
+        border:1px solid var(--color-borde);
+        border-radius:10px;
+        background:#fff;
+        overflow:hidden;
+    }
+
+    table tbody td,
+    table tfoot th{
+        display:grid;
+        grid-template-columns:minmax(112px, 42%) minmax(0, 1fr);
+        gap:8px;
+        align-items:center;
+        min-height:38px;
+        padding:8px 10px;
+        border-top:1px solid #eef0f2;
+        text-align:right;
+        white-space:normal;
+    }
+
+    table tbody td:first-child,
+    table tfoot th:first-child{
+        border-top:0;
+    }
+
+    table tbody td::before,
+    table tfoot th::before{
+        content:attr(data-label);
+        color:var(--color-muted);
+        font-size:11px;
+        font-weight:800;
+        text-align:left;
+        text-transform:uppercase;
+    }
+
+    table tbody td[colspan],
+    table tfoot th[colspan]{
+        display:block;
+        text-align:right;
+    }
+
+    table tbody td[colspan]::before,
+    table tfoot th[colspan]::before{
+        content:"";
+    }
+
+    input.fisico{
+        justify-self:end;
     }
 }

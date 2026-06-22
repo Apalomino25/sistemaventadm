@@ -1,0 +1,238 @@
+.compras-container{
+    width:min(1280px, calc(100% - 32px));
+    margin:22px auto;
+    padding:24px;
+    background:#fff;
+    border:1px solid #e3e6ea;
+    border-radius:12px;
+    box-shadow:0 12px 30px rgba(20,24,31,.08);
+}
+
+.compras-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+    margin-bottom:16px;
+}
+
+.oculto{
+    display:none !important;
+}
+
+.compras-busqueda{
+    margin:0 0 12px;
+    padding:14px;
+    border:1px solid #d7dce2;
+    border-radius:10px;
+    background:#fbfbfd;
+}
+
+.compras-busqueda label{
+    display:block;
+    margin-bottom:8px;
+    color:#626a73;
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+}
+
+.compras-busqueda-linea{
+    display:grid;
+    grid-template-columns:minmax(220px, 1fr) auto;
+    gap:8px;
+}
+
+.compras-busqueda input,
+.compra-form input{
+    min-height:40px;
+    border:1px solid #cfd5dc;
+    border-radius:8px;
+    padding:8px 10px;
+    outline:none;
+}
+
+.compras-busqueda input:focus,
+.compra-form input:focus{
+    border-color:#FF1493;
+    box-shadow:0 0 0 3px rgba(255,20,147,.12);
+}
+
+.compras-busqueda button{
+    min-height:40px;
+    border:0;
+    border-radius:8px;
+    padding:8px 14px;
+    background:#1f2937;
+    color:#fff;
+    cursor:pointer;
+    font-weight:800;
+}
+
+.compras-busqueda button:hover{
+    background:#FF1493;
+}
+
+.mensaje-compra{
+    margin:0 0 12px;
+    padding:10px 12px;
+    border-radius:8px;
+    border:1px solid #cfd5dc;
+    background:#f8fafc;
+    color:#374151;
+    font-size:13px;
+    font-weight:700;
+}
+
+.mensaje-compra.existente{
+    border-color:#FF1493;
+    background:#fff0f7;
+    color:#b00063;
+}
+
+.resultados-compra{
+    display:grid;
+    gap:8px;
+    margin-top:10px;
+}
+
+.resultado-compra{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    width:100%;
+    border:1px solid #d7dce2;
+    border-radius:8px;
+    padding:10px 12px;
+    background:#fff;
+    color:#1f2937;
+    text-align:left;
+    cursor:pointer;
+}
+
+.resultado-compra:hover{
+    border-color:#FF1493;
+    background:#fff0f7;
+}
+
+.resultado-compra strong{
+    color:#b00063;
+}
+
+.resultado-compra span{
+    color:#626a73;
+    font-size:12px;
+}
+
+.compra-form{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+    gap:12px;
+    margin-bottom:22px;
+    padding:14px;
+    border:1px solid #ddd;
+    border-radius:12px;
+    background:#fbfbfd;
+}
+
+.compra-form .campo{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+}
+
+.compra-form label{
+    color:#374151;
+    font-size:13px;
+    font-weight:700;
+}
+
+.producto-compra{
+    grid-column:1 / -1;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #FF1493;
+    background:#fff0f7;
+}
+
+.producto-compra strong{
+    color:#b00063;
+    font-size:16px;
+}
+
+.producto-compra span{
+    color:#4b5563;
+    font-size:13px;
+}
+
+.campo-observacion{
+    grid-column:span 2;
+}
+
+.compra-total{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:4px;
+    min-height:72px;
+    padding:12px;
+    border:1px solid #d7dce2;
+    border-radius:8px;
+    background:#fff;
+}
+
+.compra-total span{
+    color:#626a73;
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.compra-total strong{
+    color:#202124;
+    font-size:20px;
+}
+
+.acciones-form{
+    display:flex;
+    align-items:end;
+    gap:8px;
+}
+
+.acciones-form button{
+    min-height:38px;
+    border:0;
+    border-radius:8px;
+    padding:8px 14px;
+    background:#FF1493;
+    color:#fff;
+    cursor:pointer;
+    font-weight:800;
+}
+
+.acciones-form button:hover{
+    background:#d90078;
+}
+
+.acciones-form .secundario{
+    background:#777;
+}
+
+@media (max-width:700px){
+    .compras-container{
+        width:calc(100% - 18px);
+        margin:10px auto;
+        padding:14px;
+    }
+
+    .compras-busqueda-linea{
+        grid-template-columns:1fr;
+    }
+
+    .campo-observacion{
+        grid-column:auto;
+    }
+}

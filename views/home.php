@@ -91,11 +91,13 @@ $esAdmin = in_array($rolSesion, ['administrador', 'admin'], true);
             </div>
         </div>
 
+        <?php if($esAdmin): ?>
         <div class="dropdown">
-            <button class="menu-btn">
-                <span>COMPRAS</span>
+            <button class="menu-btn" onclick="cargarPagina('compras.php')">
+                <i class="fa-solid fa-truck-ramp-box"></i> <span class="titulo-botones">COMPRAS</span>
             </button>
         </div>
+        <?php endif; ?>
 
     </div>
 
@@ -113,6 +115,7 @@ $esAdmin = in_array($rolSesion, ['administrador', 'admin'], true);
                     <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
                 </a>
             </div>
+        </div>
     </div>
 
 </header>
@@ -121,6 +124,7 @@ $esAdmin = in_array($rolSesion, ['administrador', 'admin'], true);
 
 <script src="../assets/js/pos.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/pos.js'); ?>"></script>
 <script src="../assets/js/inventarios.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/inventarios.js'); ?>"></script>
+<script src="../assets/js/compras.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/compras.js'); ?>"></script>
 <script src="../assets/js/home.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/home.js'); ?>"></script>
 
 </body>

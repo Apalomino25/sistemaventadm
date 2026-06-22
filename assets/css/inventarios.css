@@ -384,9 +384,66 @@
     background:#FF1493;
 }
 
+.btn-ver-kardex{
+    margin-top:6px;
+    border:0;
+    border-radius:6px;
+    padding:7px 10px;
+    background:#0f766e;
+    color:#fff;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.btn-ver-kardex:hover{
+    background:#0d9488;
+}
+
 .tabla-ventas td span{
     color:#666;
     font-size:12px;
+}
+
+.kardex-resumen{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:10px;
+    margin:0 0 14px;
+}
+
+.kardex-resumen > div{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    min-height:78px;
+    padding:12px;
+    border:1px solid #d7dce2;
+    border-radius:8px;
+    background:#fbfbfd;
+}
+
+.kardex-resumen span{
+    color:#626a73;
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.kardex-resumen strong{
+    color:#202124;
+    font-size:20px;
+}
+
+.kardex-resumen small{
+    color:#626a73;
+    font-size:12px;
+}
+
+.tabla-kardex td:nth-child(4),
+.tabla-kardex td:nth-child(5),
+.tabla-kardex td:nth-child(6),
+.tabla-kardex td:nth-child(7){
+    font-weight:800;
 }
 
 .alertas-inventario{
