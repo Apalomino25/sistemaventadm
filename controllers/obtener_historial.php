@@ -10,6 +10,7 @@ $estadoPagoFiltro = $_GET['estadoPago'] ?? '';
 $tipoPagoFiltro = $_GET['tipoPago'] ?? '';
 $estadoFiltro = $_GET['estado'] ?? '';
 $clienteFiltro = (int)($_GET['clienteID'] ?? 0);
+$clienteNombreFiltro = trim((string)($_GET['buscar_cliente'] ?? ''));
 
 $where = [];
 $params = [];
@@ -48,6 +49,9 @@ if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
 if($clienteFiltro > 0){
     $where[] = "v.clienteID = :clienteID";
     $params[':clienteID'] = $clienteFiltro;
+} elseif($clienteNombreFiltro !== ''){
+    $where[] = "(c.nombre LIKE :clienteNombre OR c.numeroDocumento LIKE :clienteNombre OR c.telefono LIKE :clienteNombre)";
+    $params[':clienteNombre'] = '%' . $clienteNombreFiltro . '%';
 }
 
 $sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,

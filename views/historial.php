@@ -10,12 +10,7 @@ $estadoPagoFiltro = $_GET['estadoPago'] ?? '';
 $tipoPagoFiltro = $_GET['tipoPago'] ?? '';
 $estadoFiltro = $_GET['estado'] ?? '';
 $clienteFiltro = (int)($_GET['clienteID'] ?? 0);
-
-$clientes = $conn->query("
-    SELECT clienteID, nombre, numeroDocumento
-    FROM clientes
-    ORDER BY nombre ASC
-")->fetchAll(PDO::FETCH_ASSOC);
+$clienteNombreFiltro = trim((string)($_GET['buscar_cliente'] ?? ''));
 
 $where = ["DATE(v.fecha) BETWEEN :fechaDesde AND :fechaHasta"];
 $params = [
@@ -51,6 +46,9 @@ if($estadoFiltro !== '' && in_array((int)$estadoFiltro, [0, 1], true)){
 if($clienteFiltro > 0){
     $where[] = "v.clienteID = :clienteID";
     $params[':clienteID'] = $clienteFiltro;
+} elseif($clienteNombreFiltro !== ''){
+    $where[] = "(c.nombre LIKE :clienteNombre OR c.numeroDocumento LIKE :clienteNombre OR c.telefono LIKE :clienteNombre)";
+    $params[':clienteNombre'] = '%' . $clienteNombreFiltro . '%';
 }
 
 $sql = "SELECT v.ventaID, c.nombre AS cliente, v.total, v.pago, v.vuelto, v.fecha,
@@ -136,13 +134,25 @@ $resultado = $stmt;
         </label>
 
 
-         <!-- bUSQUEDA DE CLIENTE -->
-
-        <div class="autocomplete">
-            <label for="buscar_Clientes">Buscar Clientes: </label>
-            <input type="text" id="buscar_cliente" name="buscar_cliente" placeholder="Escribel el cliente" autocomplete="off">
-            <input type="hidden" id="producto_id" name="producto_id">
-            <div id="resultados_productos" class="resultados"> </div>
+        <div class="historial-cliente-campo">
+            <label for="historialClienteNombre">Cliente</label>
+            <div class="historial-cliente-busqueda">
+                <input
+                    type="text"
+                    id="historialClienteNombre"
+                    name="buscar_cliente"
+                    value="<?= htmlspecialchars($clienteNombreFiltro) ?>"
+                    placeholder="Nombre, documento o telefono"
+                    autocomplete="off"
+                >
+                <input
+                    type="hidden"
+                    id="historialClienteID"
+                    name="clienteID"
+                    value="<?= $clienteFiltro > 0 ? intval($clienteFiltro) : '' ?>"
+                >
+                <div id="historialClientesResultados" class="resultados-clientes"></div>
+            </div>
         </div>
 
 

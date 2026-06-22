@@ -5,6 +5,7 @@ const MIN_CARACTERES_BUSQUEDA = 2;
 let busquedaTimer = null;
 let busquedaSecuencia = 0;
 let clienteTimer = null;
+let historialClienteTimer = null;
 let clienteGeneral = null;
 
 function aplicarEtiquetasTablaResponsiva(tabla){
@@ -45,6 +46,7 @@ window.iniciarPOS = function() {
     const mensajePago = document.getElementById("msmPago");
 
     aplicarEtiquetasTablasResponsivas();
+    iniciarHistorial();
 
     if(!inputCodigo) return;
     inputCodigo.focus();
@@ -453,6 +455,117 @@ function buscarClientes(q){
     })
     .catch(err => console.error("Error al buscar clientes:", err));
 }
+
+function ocultarResultadosClientesHistorial(){
+    const contenedor = document.getElementById("historialClientesResultados");
+    if(!contenedor) return;
+
+    contenedor.innerHTML = "";
+    contenedor.classList.remove("activo");
+}
+
+function seleccionarClienteHistorial(cliente){
+    const input = document.getElementById("historialClienteNombre");
+    const idInput = document.getElementById("historialClienteID");
+    if(!input || !idInput) return;
+
+    input.value = cliente.nombre || "";
+    idInput.value = cliente.clienteID || "";
+    ocultarResultadosClientesHistorial();
+}
+
+function agregarMensajeClienteHistorial(contenedor, mensaje){
+    const div = document.createElement("div");
+    div.className = "resultado-cliente vacio";
+    div.textContent = mensaje;
+    contenedor.appendChild(div);
+    contenedor.classList.add("activo");
+}
+
+function buscarClientesHistorial(q){
+    const contenedor = document.getElementById("historialClientesResultados");
+    if(!contenedor) return;
+
+    fetch("../controllers/buscar_cliente.php?q=" + encodeURIComponent(q))
+    .then(res => res.json())
+    .then(data => {
+        const clientes = data.clientes || [];
+        contenedor.innerHTML = "";
+
+        if(clientes.length === 0){
+            agregarMensajeClienteHistorial(contenedor, "Sin clientes encontrados");
+            return;
+        }
+
+        clientes.forEach(cliente => {
+            const btn = document.createElement("button");
+            const nombre = document.createElement("strong");
+            const meta = document.createElement("span");
+
+            btn.type = "button";
+            btn.className = "resultado-cliente";
+            nombre.textContent = cliente.nombre || "";
+            meta.textContent = `${cliente.tipoDocumento || ""} ${cliente.numeroDocumento || ""} ${cliente.telefono || ""}`.trim();
+
+            btn.appendChild(nombre);
+            btn.appendChild(meta);
+            btn.addEventListener("click", () => seleccionarClienteHistorial(cliente));
+            contenedor.appendChild(btn);
+        });
+
+        contenedor.classList.add("activo");
+    })
+    .catch(err => console.error("Error al buscar clientes del historial:", err));
+}
+
+function iniciarBuscadorClienteHistorial(){
+    const input = document.getElementById("historialClienteNombre");
+    const idInput = document.getElementById("historialClienteID");
+
+    if(!input || !idInput || input.dataset.iniciado === "1") return;
+    input.dataset.iniciado = "1";
+
+    input.addEventListener("input", () => {
+        idInput.value = "";
+        clearTimeout(historialClienteTimer);
+
+        const q = input.value.trim();
+        if(q.length < 2){
+            ocultarResultadosClientesHistorial();
+            return;
+        }
+
+        historialClienteTimer = setTimeout(() => buscarClientesHistorial(q), 250);
+    });
+
+    input.addEventListener("focus", () => {
+        const q = input.value.trim();
+        if(q.length >= 2){
+            buscarClientesHistorial(q);
+        }
+    });
+
+    input.addEventListener("keydown", e => {
+        if(e.key === "Escape"){
+            ocultarResultadosClientesHistorial();
+        }
+    });
+
+    if(!window.historialClienteDocumentListener){
+        document.addEventListener("click", e => {
+            if(!e.target.closest(".historial-cliente-busqueda")){
+                ocultarResultadosClientesHistorial();
+            }
+        });
+        window.historialClienteDocumentListener = true;
+    }
+}
+
+function iniciarHistorial(){
+    iniciarBuscadorClienteHistorial();
+}
+
+window.iniciarHistorial = iniciarHistorial;
 
 function recalcularSubtotalFila(fila){
     const cantidad = parseInt(fila.querySelector(".cantidad").textContent) || 0;

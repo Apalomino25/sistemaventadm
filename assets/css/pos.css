@@ -385,6 +385,25 @@ tr.inactivo{
     text-transform:uppercase;
 }
 
+.historial-cliente-campo{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    min-width:240px;
+    color:var(--color-muted);
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+}
+
+.historial-cliente-busqueda{
+    position:relative;
+}
+
+.historial-cliente-busqueda input[type="text"]{
+    width:100%;
+}
+
 .filtros-historial input,
 .filtros-historial select,
 .editar-estado-pago{
