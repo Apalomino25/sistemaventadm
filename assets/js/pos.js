@@ -1750,6 +1750,7 @@ window.initCierres = function() {
     if(!btnGuardar) return;
 
     const inputsFisico = document.querySelectorAll('.fisico');
+    const fechaCierre = btnGuardar.dataset.fecha || document.getElementById('fecha-cierre')?.value || '';
 
     function formatearNumero(valor){
         return (parseFloat(valor) || 0).toFixed(2);
@@ -1836,7 +1837,8 @@ window.initCierres = function() {
     btnGuardar.addEventListener('click', () => {
         if(btnGuardar.disabled) return;
 
-        if(!confirm('¿Guardar el cierre diario? Luego no se podrán registrar más ventas hoy.')){
+        const textoFecha = fechaCierre ? ' del ' + fechaCierre : ' diario';
+        if(!confirm('Guardar el cierre' + textoFecha + '?')){
             return;
         }
 
@@ -1855,16 +1857,20 @@ window.initCierres = function() {
         fetch('../controllers/guardar_cierre.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({cierres: cierresData})
+            body: JSON.stringify({fecha: fechaCierre, cierres: cierresData})
         })
         .then(res => res.json())
         .then(res => {
             if(res.ok){
                 alert(res.message || 'Cierre guardado correctamente');
+                const destinoHistorial = fechaCierre
+                    ? `historial_cierre.php?fecha_desde=${encodeURIComponent(fechaCierre)}&fecha_hasta=${encodeURIComponent(fechaCierre)}`
+                    : 'historial_cierre.php';
+
                 if(typeof cargarPagina === 'function'){
-                    cargarPagina('historial_cierre.php');
+                    cargarPagina(destinoHistorial);
                 } else {
-                    location.reload();
+                    window.location.href = destinoHistorial;
                 }
             } else {
                 alert('Error: ' + res.error);

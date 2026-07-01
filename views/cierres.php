@@ -4,16 +4,60 @@ require_once __DIR__ . '/../config/schema_helpers.php';
 
 date_default_timezone_set('America/Lima');
 $hoy = date('Y-m-d');
+$fechaParam = trim((string)($_GET['fecha'] ?? $hoy));
+$fechaCierre = $hoy;
+
+if(preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaParam)){
+    $fechaObj = DateTimeImmutable::createFromFormat('!Y-m-d', $fechaParam);
+    $erroresFecha = DateTimeImmutable::getLastErrors();
+    $fechaValida = $fechaObj
+        && ($erroresFecha === false || ($erroresFecha['warning_count'] === 0 && $erroresFecha['error_count'] === 0));
+
+    if($fechaValida){
+        $fechaNormalizada = $fechaObj->format('Y-m-d');
+        if($fechaNormalizada <= $hoy){
+            $fechaCierre = $fechaNormalizada;
+        }
+    }
+}
+
+$fechaCierreTexto = date('d-m-Y', strtotime($fechaCierre));
+$esCierreHoy = $fechaCierre === $hoy;
 $cierreRealizado = false;
 $cierres = [];
 $detalleGanancia = [];
 $totalPendienteDia = 0;
+$fechasPendientesCierre = [];
 
 try {
     asegurarColumnasPagos($conn);
 
+    $stmtPendientesCierre = $conn->prepare("
+        SELECT fechas.fecha_cierre
+        FROM (
+            SELECT DATE(vp.fechaPago) AS fecha_cierre
+            FROM venta_pagos vp
+            INNER JOIN ventas v ON v.ventaID = vp.ventaID
+            WHERE vp.estado = 1
+              AND v.estado = 1
+              AND vp.fechaPago IS NOT NULL
+        ) fechas
+        WHERE fechas.fecha_cierre <= ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM cierres c
+              WHERE c.fecha = fechas.fecha_cierre
+                AND c.estado = 1
+          )
+        GROUP BY fechas.fecha_cierre
+        ORDER BY fechas.fecha_cierre DESC
+        LIMIT 10
+    ");
+    $stmtPendientesCierre->execute([$hoy]);
+    $fechasPendientesCierre = $stmtPendientesCierre->fetchAll(PDO::FETCH_COLUMN);
+
     $stmtCierre = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = ? AND estado = 1");
-    $stmtCierre->execute([$hoy]);
+    $stmtCierre->execute([$fechaCierre]);
     $cierreRealizado = $stmtCierre->fetchColumn() > 0;
 
     if($cierreRealizado){
@@ -24,7 +68,7 @@ try {
             WHERE fecha = ? AND estado = 1
             ORDER BY tipopago
         ");
-        $stmt->execute([$hoy]);
+        $stmt->execute([$fechaCierre]);
     } else {
         $stmt = $conn->prepare("
             SELECT
@@ -88,7 +132,7 @@ try {
             ) gt ON gt.tipopago = vt.tipopago
             ORDER BY vt.tipopago
         ");
-        $stmt->execute([$hoy, $hoy, $hoy, $hoy]);
+        $stmt->execute([$fechaCierre, $fechaCierre, $fechaCierre, $fechaCierre]);
     }
 
     $cierres = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -122,7 +166,7 @@ try {
               AND v.estado = 1
             GROUP BY vp.tipoPago
         ");
-        $stmtCostosCierre->execute([$hoy]);
+        $stmtCostosCierre->execute([$fechaCierre]);
         $costosPorTipo = [];
         foreach($stmtCostosCierre->fetchAll(PDO::FETCH_ASSOC) as $costoTipo){
             $costosPorTipo[strtolower(trim($costoTipo['tipopago']))] = $costoTipo;
@@ -157,7 +201,7 @@ try {
         GROUP BY p.productoID, p.nombre, p.precioCompra, d.precioUnitario
         ORDER BY p.nombre
     ");
-    $stmtGanancia->execute([$hoy]);
+    $stmtGanancia->execute([$fechaCierre]);
     $detalleGanancia = $stmtGanancia->fetchAll(PDO::FETCH_ASSOC);
 
 } catch(PDOException $e) {
@@ -205,18 +249,52 @@ function cantidadCierre($valor): string {
 <body>
 
 <div class="cierres-container">
-    <h2>Cierre del Dia (<?= date('d-m-Y') ?>)</h2>
+    <div class="cierre-encabezado">
+        <div>
+            <h2>Cierre de Caja (<?= htmlspecialchars($fechaCierreTexto) ?>)</h2>
+            <?php if(!$esCierreHoy): ?>
+                <p>Estas revisando un dia anterior pendiente de cierre.</p>
+            <?php endif; ?>
+        </div>
+
+        <form class="selector-cierre filtros-historial" data-page="cierres.php">
+            <label for="fecha-cierre">Fecha de cierre</label>
+            <input
+                type="date"
+                id="fecha-cierre"
+                name="fecha"
+                value="<?= htmlspecialchars($fechaCierre) ?>"
+                max="<?= htmlspecialchars($hoy) ?>"
+            >
+            <button type="submit">Ver fecha</button>
+        </form>
+    </div>
+
+    <?php if(!empty($fechasPendientesCierre)): ?>
+        <div class="fechas-pendientes-cierre">
+            <span>Dias pendientes:</span>
+            <?php foreach($fechasPendientesCierre as $fechaPendiente): ?>
+                <a
+                    href="cierres.php?fecha=<?= htmlspecialchars($fechaPendiente) ?>"
+                    class="<?= $fechaPendiente === $fechaCierre ? 'activo' : '' ?>"
+                    onclick="if(typeof cargarPagina === 'function'){event.preventDefault(); cargarPagina('cierres.php?fecha=<?= htmlspecialchars($fechaPendiente) ?>');}"
+                ><?= date('d-m-Y', strtotime($fechaPendiente)) ?></a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if($cierreRealizado): ?>
-        <div class="cierre-aviso cerrado">El cierre de hoy ya fue realizado. Las ventas estan bloqueadas para este dia.</div>
+        <div class="cierre-aviso cerrado">El cierre de esta fecha ya fue realizado.</div>
     <?php elseif(empty($cierres)): ?>
-        <div class="cierre-aviso">No hay ventas activas hoy para cerrar.</div>
-    <?php else: ?>
+        <div class="cierre-aviso">No hay ventas activas para cerrar en esta fecha.</div>
+    <?php elseif($esCierreHoy): ?>
         <div class="cierre-aviso pendiente">Revisa los montos fisicos antes de guardar. Al cerrar, ya no se podran registrar ventas hoy.</div>
+    <?php else: ?>
+        <div class="cierre-aviso pendiente">Revisa los montos fisicos antes de guardar. Se guardara el cierre pendiente de esta fecha.</div>
     <?php endif; ?>
 
     <?php if(!$cierreRealizado && $totalPendienteDia > 0): ?>
-        <div class="cierre-aviso pendiente">Saldo pendiente del dia: S/ <?= number_format($totalPendienteDia, 2, '.', '') ?>. No se suma al fisico ni a los medios de pago del cierre.</div>
+        <div class="cierre-aviso pendiente">Saldo pendiente de la fecha: S/ <?= number_format($totalPendienteDia, 2, '.', '') ?>. No se suma al fisico ni a los medios de pago del cierre.</div>
     <?php endif; ?>
 
     <table id="tabla-cierres">
@@ -286,11 +364,12 @@ function cantidadCierre($valor): string {
     <div class="cont-guardar-cierre">
         <button
             id="guardar-cierre"
+            data-fecha="<?= htmlspecialchars($fechaCierre) ?>"
             <?= ($cierreRealizado || empty($cierres)) ? 'disabled' : '' ?>
         >Guardar Cierre</button>
     </div>
 
-    <h2>Detalle de Ganancia del Dia</h2>
+    <h2>Detalle de Ganancia</h2>
 
     <table id="tabla-ganancia">
         <thead>

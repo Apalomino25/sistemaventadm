@@ -23,6 +23,7 @@ $hoy = date('Y-m-d');
 $usuarioID = $_SESSION['usuarioID'] ?? 1;
 $data = json_decode(file_get_contents('php://input'), true);
 $fisicos = [];
+$fechaCierre = $hoy;
 
 if(($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'){
     responder([
@@ -38,6 +39,25 @@ if(!is_array($data) || empty($data['cierres']) || !is_array($data['cierres'])){
     ]);
 }
 
+$fechaParam = trim((string)($data['fecha'] ?? $hoy));
+if(preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaParam)){
+    $fechaObj = DateTimeImmutable::createFromFormat('!Y-m-d', $fechaParam);
+    $erroresFecha = DateTimeImmutable::getLastErrors();
+    $fechaValida = $fechaObj
+        && ($erroresFecha === false || ($erroresFecha['warning_count'] === 0 && $erroresFecha['error_count'] === 0));
+
+    if($fechaValida){
+        $fechaCierre = $fechaObj->format('Y-m-d');
+    }
+}
+
+if($fechaCierre > $hoy){
+    responder([
+        'ok' => false,
+        'error' => 'No se puede cerrar una fecha futura.'
+    ]);
+}
+
 foreach($data['cierres'] as $cierre){
     $tipo = strtolower(trim($cierre['tipopago'] ?? ''));
     if($tipo !== ''){
@@ -49,12 +69,12 @@ try {
     asegurarColumnasPagos($conn);
 
     $check = $conn->prepare("SELECT COUNT(*) FROM cierres WHERE fecha = ? AND estado = 1");
-    $check->execute([$hoy]);
+    $check->execute([$fechaCierre]);
 
     if($check->fetchColumn() > 0){
         responder([
             'ok' => false,
-            'error' => 'Ya existe un cierre activo para hoy.'
+            'error' => 'Ya existe un cierre activo para esta fecha.'
         ]);
     }
 
@@ -117,7 +137,7 @@ try {
         ) gt ON gt.tipopago = vt.tipopago
         ORDER BY vt.tipopago
     ");
-    $stmt->execute([$hoy, $hoy, $hoy, $hoy]);
+    $stmt->execute([$fechaCierre, $fechaCierre, $fechaCierre, $fechaCierre]);
     $resumenes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $resumenes = array_values(array_filter($resumenes, function($resumen){
         return strtolower(trim($resumen['tipopago'] ?? '')) !== 'pendiente';
@@ -141,7 +161,7 @@ try {
           AND v.estado = 1
         GROUP BY vp.tipoPago
     ");
-    $stmtCostosCierre->execute([$hoy]);
+    $stmtCostosCierre->execute([$fechaCierre]);
     $costosPorTipo = [];
     foreach($stmtCostosCierre->fetchAll(PDO::FETCH_ASSOC) as $costoTipo){
         $costosPorTipo[strtolower(trim($costoTipo['tipopago']))] = $costoTipo;
@@ -159,7 +179,7 @@ try {
     if(empty($resumenes)){
         responder([
             'ok' => false,
-            'error' => 'No hay ventas activas hoy para cerrar.'
+            'error' => 'No hay ventas activas para cerrar en esta fecha.'
         ]);
     }
 
@@ -189,7 +209,7 @@ try {
         }
 
         $insert->execute([
-            ':fecha' => $hoy,
+            ':fecha' => $fechaCierre,
             ':tipopago' => $tipopago,
             ':total_ventas' => floatval($resumen['total_ventas']),
             ':total_pagado' => floatval($resumen['total_pagado']),
@@ -210,7 +230,7 @@ try {
 
     responder([
         'ok' => true,
-        'message' => 'Cierre guardado correctamente. Desde ahora no se permiten ventas para hoy.'
+        'message' => 'Cierre guardado correctamente para la fecha ' . date('d-m-Y', strtotime($fechaCierre)) . '.'
     ]);
 
 } catch(Throwable $e){
